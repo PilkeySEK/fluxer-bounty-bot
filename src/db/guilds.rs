@@ -1,10 +1,13 @@
 use std::sync::Arc;
 
 use anyhow::Context;
+use enum_map::{Enum, EnumMap, enum_map};
+use enumset::{EnumSet, EnumSetType};
 use fluxer_neptunium::model::id::{
     Id,
     marker::{ChannelMarker, GuildMarker},
 };
+use serde::{Deserialize, Serialize};
 
 use crate::db::DbManager;
 
@@ -24,7 +27,7 @@ impl DbManager {
             SET guild_id = EXCLUDED.guild_id
             RETURNING *",
             guild_id.into_inner().cast_signed(),
-            serde_json::to_value(&BountySubmissionFormat {})?,
+            serde_json::to_value(&BountySubmissionFormat::default())?,
         )
         .fetch_one(&self.pool)
         .await?;
@@ -121,8 +124,40 @@ impl DbManager {
     }
 }
 
-#[derive(serde::Deserialize, serde::Serialize)]
-pub struct BountySubmissionFormat {}
+#[derive(Enum, Serialize, Deserialize, EnumSetType)]
+pub enum BountyInfoKey {
+    Title,
+    Deadline,
+    IssueUrl,
+    AdditionalInfo,
+    JudgingCriteria,
+    BountyAmount,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct BountySubmissionFormat {
+    pub titles: EnumMap<BountyInfoKey, Vec<String>>,
+    pub required: EnumSet<BountyInfoKey>,
+}
+
+impl Default for BountySubmissionFormat {
+    fn default() -> Self {
+        let titles = enum_map! {
+            BountyInfoKey::Title => vec!["Title".to_owned(), "Bounty Title".to_owned()],
+            BountyInfoKey::Deadline => vec!["Due Date".to_owned(), "Due Date (Timeline)".to_owned(), "Deadline".to_owned()],
+            BountyInfoKey::IssueUrl => vec!["Issue URL (Optional)".to_owned(), "Issue URL".to_owned()],
+            BountyInfoKey::AdditionalInfo => vec!["Additional Information".to_owned(), "Additional Info".to_owned()],
+            BountyInfoKey::JudgingCriteria => vec!["Judging Criteria".to_owned()],
+            BountyInfoKey::BountyAmount => vec!["Bounty Amount".to_owned(), "Amount".to_owned()],
+        };
+        let required = BountyInfoKey::Title
+            | BountyInfoKey::AdditionalInfo
+            | BountyInfoKey::JudgingCriteria
+            | BountyInfoKey::BountyAmount;
+
+        Self { titles, required }
+    }
+}
 
 pub struct GuildConfig {
     pub guild_id: Id<GuildMarker>,
