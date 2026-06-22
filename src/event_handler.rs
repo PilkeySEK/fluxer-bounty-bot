@@ -1,24 +1,37 @@
 use std::sync::Arc;
 
 use anyhow::Context as _;
-use chrono::{DateTime, Utc};
 use fluxer_neptunium::{
-    cached_payload::{CachedMessageCreate, CachedReady},
-    create_embed,
-    model::id::{Id, marker::UserMarker},
+    cached_payload::{CachedMessageCreate, CachedMessageReactionAdd, CachedReady},
+    model::{
+        guild::permissions::Permissions,
+        id::{Id, marker::UserMarker},
+    },
     prelude::*,
 };
 
-use crate::db::DbManager;
+use crate::{
+    commands::{self, CommandContext},
+    db::DbManager,
+    event_handler::reactions::ReactionsEventHandler,
+};
+
+pub mod reactions;
 
 pub struct Handler {
     db: DbManager,
     client_id: Id<UserMarker>,
+    #[expect(clippy::struct_field_names)]
+    reactions_event_handler: ReactionsEventHandler,
 }
 
 impl Handler {
     pub fn new(db: DbManager, client_id: Id<UserMarker>) -> Self {
-        Self { db, client_id }
+        Self {
+            db,
+            client_id,
+            reactions_event_handler: ReactionsEventHandler::new(),
+        }
     }
 }
 
@@ -44,6 +57,7 @@ impl EventHandler for Handler {
         let Some(guild_id) = message.channel_id.get(&ctx).await?.guild_id else {
             return Ok(());
         };
+        let author_guild_member = guild_id.get_member(&ctx, message.author.id).await?.load();
 
         let guild_config = match self
             .db
@@ -60,6 +74,9 @@ impl EventHandler for Handler {
 
         if let Some(command_channels) = &guild_config.command_channels
             && !command_channels.contains(&message.channel_id)
+            && !author_guild_member
+                .has_permissions(&ctx, Permissions::MANAGE_GUILD)
+                .await?
         {
             return Ok(());
         }
@@ -83,26 +100,33 @@ impl EventHandler for Handler {
 
         let (command, args) = full_command.split_once(' ').unwrap_or((full_command, ""));
 
-        match command {
-            "ping" => {
-                let latency = {
-                    let now = Utc::now();
-                    let created_at: DateTime<Utc> = message.timestamp.into();
-                    now.signed_duration_since(created_at)
-                };
-                message
-                    .reply(
-                        &ctx,
-                        create_embed!(
-                            title: "Pong!",
-                            description: format!("**Latency:** {} ms", latency.num_milliseconds()),
-                        ),
-                    )
-                    .await?;
-            }
-            _ => return Ok(()),
+        let command_context = CommandContext {
+            ctx: &ctx,
+            db: &self.db,
+            message: &message,
+            guild_member: &author_guild_member,
+            guild_id,
+            reaction_handler_tx: &self.reactions_event_handler.tx,
+        };
+
+        if let Err(e) = match command {
+            "ping" => commands::misc::ping(command_context).await,
+            "bounty" => commands::bounty_management::bounty_management(command_context, args).await,
+            _ => Ok(()),
+        } {
+            tracing::error!("Error executing command `{command}`: {e}");
         }
 
         Ok(())
+    }
+
+    async fn on_message_reaction_add(
+        &self,
+        _ctx: Context,
+        event: Arc<CachedMessageReactionAdd>,
+    ) -> Result<(), EventError> {
+        self.reactions_event_handler
+            .handle_reaction_add(event)
+            .await
     }
 }

@@ -18,3 +18,15 @@ dotenvy = "0.15.7"
 moka = { version = "0.12.15", features = ["sync"] }
 serde = "1.0.228"
 serde_json = "1.0.150"
+sqids = "0.4.2"
+strum = { version = "0.28.0", features = ["derive"] }
+
+[lints.clippy]
+pedantic = "warn"
+perf = "warn"
+complexity = "warn"
+suspicious = "warn"
+unwrap_used = "warn"
+expect_used = "warn"
+new_without_default = { level = "allow", priority = 1 }
+allow_attributes = "warn"

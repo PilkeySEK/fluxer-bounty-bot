@@ -13,8 +13,9 @@ CREATE TABLE bounties (
     state TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL,
     -- The "claimer" is the person who will or has completed the implementation of the bounty
-    claimed_by BIGINT NOT NULL,
-    related_message_id BIGINT
+    claimed_by BIGINT,
+    related_message_id BIGINT,
+    related_channel_id BIGINT
 );
 
 CREATE TABLE bounty_payers (
@@ -36,5 +37,6 @@ CREATE TABLE guilds (
     command_prefixes TEXT[] NOT NULL DEFAULT ARRAY['b!'],
     -- Serialized and deserialized from Rust
     bounty_submission_format JSONB NOT NULL,
-    command_channels BIGINT[]
+    command_channels BIGINT[],
+    current_bounty_number BIGINT NOT NULL DEFAULT 0
 );
