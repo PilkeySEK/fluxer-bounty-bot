@@ -48,6 +48,7 @@ impl DbManager {
         )
         .execute(&self.pool)
         .await?;
+        self.cached_guild_config.invalidate(&guild_id);
         Ok(())
     }
     pub async fn set_approval_queue_channel(
@@ -64,6 +65,7 @@ impl DbManager {
         )
         .execute(&self.pool)
         .await?;
+        self.cached_guild_config.invalidate(&guild_id);
         Ok(())
     }
     pub async fn set_claimed_bounties_channel(
@@ -80,6 +82,7 @@ impl DbManager {
         )
         .execute(&self.pool)
         .await?;
+        self.cached_guild_config.invalidate(&guild_id);
         Ok(())
     }
     pub async fn set_completed_bounties_channel(
@@ -96,6 +99,7 @@ impl DbManager {
         )
         .execute(&self.pool)
         .await?;
+        self.cached_guild_config.invalidate(&guild_id);
         Ok(())
     }
     pub async fn set_denied_bounties_channel(
@@ -112,6 +116,7 @@ impl DbManager {
         )
         .execute(&self.pool)
         .await?;
+        self.cached_guild_config.invalidate(&guild_id);
         Ok(())
     }
 }
