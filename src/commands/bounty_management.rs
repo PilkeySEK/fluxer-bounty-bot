@@ -180,7 +180,6 @@ async fn delete_bounty(ctx: CommandContext<'_>, args: &str) -> anyhow::Result<()
             })
             .await
             .with_context(|| format!("Failed to delete related message of bounty {} message_id {message_id} and channel_id {channel_id}", bounty_data.bounty_id))?;
-        return Ok(());
     }
     ctx.message
         .reply(

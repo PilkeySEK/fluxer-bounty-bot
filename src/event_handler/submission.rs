@@ -68,7 +68,8 @@ pub async fn handle_submission_create(
     let bounty_number = db.get_next_bounty_number_upsert(guild_id).await?;
     let now = Utc::now();
     let related_message = if let Some(approval_queue_channel) = guild_config.approval_queue_channel
-        && let Err(e) = approval_queue_channel
+    {
+        let related_message = approval_queue_channel
             .send_message(
                 ctx,
                 bounty_content_to_message(
@@ -79,15 +80,21 @@ pub async fn handle_submission_create(
                     now,
                 ),
             )
-            .await
-    {
-        tracing::error!("Error sending message in the approval queue channel: {e}");
-        let reply_result = message.reply(ctx, create_embed!(
-                description: "Could not send the submission message in the approval queue. Submission was not created.",
-                color: FAILURE,
-            )).await;
-        message.delete(ctx).await?;
-        Some(reply_result?)
+            .await;
+        match related_message {
+            Err(e) => {
+                tracing::error!("Error sending message in the approval queue channel: {e}");
+                let reply_result = message.reply(ctx, create_embed!(
+                    description: "Could not send the submission message in the approval queue. Submission was not created.",
+                    color: FAILURE,
+                )).await;
+                message.delete(ctx).await?;
+                tokio::time::sleep(Duration::from_secs(5)).await;
+                reply_result?.delete(ctx).await?;
+                return Ok(());
+            }
+            Ok(message) => Some(message),
+        }
     } else {
         None
     };
