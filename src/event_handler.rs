@@ -13,10 +13,11 @@ use fluxer_neptunium::{
 use crate::{
     commands::{self, CommandContext},
     db::DbManager,
-    event_handler::reactions::ReactionsEventHandler,
+    event_handler::{reactions::ReactionsEventHandler, submission::handle_submission_create},
 };
 
 pub mod reactions;
+mod submission;
 
 pub struct Handler {
     db: DbManager,
@@ -93,6 +94,22 @@ impl EventHandler for Handler {
                 .iter()
                 .find_map(|prefix| content.strip_prefix(prefix))
             else {
+                if let Some(bounty_submission_channel) = guild_config.bounty_submission_channel
+                    && message.channel_id == bounty_submission_channel
+                {
+                    if let Err(e) = handle_submission_create(
+                        &ctx,
+                        &message,
+                        &author_guild_member.user.load(),
+                        &guild_config,
+                        &self.db,
+                        guild_id,
+                    )
+                    .await
+                    {
+                        tracing::error!("Error handling submission: {e}");
+                    }
+                }
                 return Ok(());
             };
             full_command

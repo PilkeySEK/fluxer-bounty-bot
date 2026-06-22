@@ -9,7 +9,7 @@ use fluxer_neptunium::model::id::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::db::DbManager;
+use crate::db::{DbManager, bounties::BountyNum};
 
 impl DbManager {
     pub async fn get_guild_config_upsert(
@@ -122,9 +122,28 @@ impl DbManager {
         self.cached_guild_config.invalidate(&guild_id);
         Ok(())
     }
+
+    pub async fn get_next_bounty_number_upsert(
+        &self,
+        guild_id: Id<GuildMarker>,
+    ) -> anyhow::Result<BountyNum> {
+        let num = sqlx::query_scalar!(
+            "INSERT INTO guilds (guild_id, bounty_submission_format)
+            VALUES ($1, $2)
+            ON CONFLICT (guild_id) DO UPDATE
+            SET current_bounty_number = guilds.current_bounty_number + 1
+            RETURNING current_bounty_number",
+            guild_id.into_inner().cast_signed(),
+            serde_json::to_value(&BountySubmissionFormat::default())?,
+        )
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(BountyNum(num))
+    }
 }
 
-#[derive(Enum, Serialize, Deserialize, EnumSetType)]
+// Reordering the fields here will also change the PartialOrd and Ord implementation, be cautious
+#[derive(Enum, Serialize, Deserialize, EnumSetType, Hash, Debug, PartialOrd, Ord)]
 pub enum BountyInfoKey {
     Title,
     Deadline,

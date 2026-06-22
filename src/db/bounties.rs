@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{collections::HashMap, str::FromStr};
 
 use anyhow::Context;
 use chrono::{DateTime, Utc};
@@ -7,7 +7,7 @@ use fluxer_neptunium::model::id::{
     marker::{ChannelMarker, GuildMarker, MessageMarker, UserMarker},
 };
 
-use crate::db::DbManager;
+use crate::db::{DbManager, guilds::BountyInfoKey};
 
 impl DbManager {
     /// Returns `Ok(None)` if the bounty with that number does not exist in the specified guild.
@@ -72,6 +72,23 @@ impl DbManager {
         .await?;
         Ok(())
     }
+
+    pub async fn create_bounty(&self, bounty: BountyCreateData) -> anyhow::Result<()> {
+        sqlx::query!(
+            "INSERT INTO bounties (bounty_number, guild_id, created_by, content, state, created_at, claimed_by, related_message_id, related_channel_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+            bounty.bounty_number.0,
+            bounty.guild_id.into_inner().cast_signed(),
+            bounty.created_by.into_inner().cast_signed(),
+            serde_json::to_value(&bounty.content)?,
+            bounty.state.to_string(),
+            bounty.created_at,
+            bounty.claimed_by.map(|id| id.into_inner().cast_signed()),
+            bounty.related_message.map(|v| v.message_id.into_inner().cast_signed()),
+            bounty.related_message.map(|v| v.channel_id.into_inner().cast_signed()),
+        ).execute(&self.pool).await?;
+        Ok(())
+    }
 }
 
 #[derive(strum::Display, strum::EnumString, PartialEq, Eq)]
@@ -86,9 +103,9 @@ pub enum BountyState {
     Rejected,
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
-pub struct BountyContent {}
+pub type BountySubmissionContent = HashMap<BountyInfoKey, String>;
 
+#[derive(Copy, Clone)]
 pub struct BountyRelatedMessage {
     pub channel_id: Id<ChannelMarker>,
     pub message_id: Id<MessageMarker>,
@@ -100,7 +117,19 @@ pub struct Bounty {
     pub bounty_number: BountyNum,
     pub guild_id: Id<GuildMarker>,
     pub created_by: Id<UserMarker>,
-    pub content: BountyContent,
+    pub content: BountySubmissionContent,
+    pub state: BountyState,
+    pub created_at: DateTime<Utc>,
+    pub claimed_by: Option<Id<UserMarker>>,
+    pub related_message: Option<BountyRelatedMessage>,
+}
+
+#[expect(clippy::struct_field_names)]
+pub struct BountyCreateData {
+    pub bounty_number: BountyNum,
+    pub guild_id: Id<GuildMarker>,
+    pub created_by: Id<UserMarker>,
+    pub content: BountySubmissionContent,
     pub state: BountyState,
     pub created_at: DateTime<Utc>,
     pub claimed_by: Option<Id<UserMarker>>,

@@ -15,6 +15,8 @@ mod db;
 mod event_handler;
 mod util;
 
+const AVATAR_URL_BASE: &str = "https://fluxerusercontent.com/avatars";
+const STATIC_BASE: &str = "https://fluxerstatic.com";
 const SQIDS_MIN_LENGTH: u8 = 5;
 static SQIDS: LazyLock<Sqids> = LazyLock::new(|| {
     #[expect(
