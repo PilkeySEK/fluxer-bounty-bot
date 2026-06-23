@@ -47,19 +47,6 @@ macro_rules! get_bounty_num_from_args {
 }
 
 pub async fn bounty_management(ctx: CommandContext<'_>, args: &'_ str) -> anyhow::Result<()> {
-    // TODO: bounty managers stored in database to bypass this
-    if !ctx
-        .guild_member
-        .has_permissions(ctx.ctx, Permissions::MANAGE_GUILD)
-        .await?
-    {
-        ctx.message.reply(ctx.ctx, create_embed!(
-            description: "You need \"Manage Community\" permissions to execute this command.",
-            color: FAILURE,
-        )).await?;
-        return Ok(());
-    }
-
     let (subcommand, args) = args.split_once(' ').unwrap_or((args, ""));
 
     match subcommand {

@@ -23,6 +23,7 @@ use crate::{
     db::{
         DbManager,
         guild_permissions::{BotPermissions, GuildPermissionEntity},
+        guilds::GuildConfig,
     },
     event_handler::reactions::{
         ReactionExpiryHandlerFn, ReactionHandler, ReactionsEventHandlerMessage,
@@ -41,6 +42,7 @@ pub struct CommandContext<'a> {
     pub guild_id: Id<GuildMarker>,
     pub reaction_handler_tx: &'a UnboundedSender<ReactionsEventHandlerMessage>,
     pub bounty_workflow_image_url: &'a str,
+    pub guild_config: &'a GuildConfig,
 }
 
 impl CommandContext<'_> {
@@ -196,7 +198,7 @@ pub fn new_dispatcher_with_commands() -> CommandDispatcher {
         (&["ping"], BotPermissions::empty(), Arc::new(misc::ping)),
         (
             &["bounty"],
-            BotPermissions::empty(),
+            BotPermissions::MANAGE_BOUNTIES,
             Arc::new(bounty_management::bounty_management),
         ),
         (
@@ -210,7 +212,7 @@ pub fn new_dispatcher_with_commands() -> CommandDispatcher {
                 "server-config",
                 "cfg",
             ],
-            BotPermissions::MODIFY_GUILD_CONFIG,
+            BotPermissions::MANAGE_GUILD_CONFIG,
             Arc::new(guild_config::guild_config),
         ),
         (

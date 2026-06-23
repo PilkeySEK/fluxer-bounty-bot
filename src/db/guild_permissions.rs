@@ -40,10 +40,8 @@ bitflags! {
     #[derive(Copy, Clone)]
     pub struct BotPermissions: u64 {
         const CREATE_BOUNTIES = 1 << 0;
-        const APPROVE_BOUNTIES = 1 << 1;
-        const REJECT_BOUNTIES = 1 << 2;
-        const DELETE_BOUNTIES = 1 << 3;
-        const MODIFY_GUILD_CONFIG = 1 << 4;
+        const MANAGE_BOUNTIES = 1 << 1;
+        const MANAGE_GUILD_CONFIG = 1 << 2;
     }
 }
 

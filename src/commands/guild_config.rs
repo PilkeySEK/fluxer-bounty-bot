@@ -11,7 +11,7 @@ use fluxer_neptunium::{
 };
 
 use crate::{
-    colors::{FAILURE, SUCCESS},
+    colors::{DEFAULT, FAILURE, SUCCESS},
     commands::CommandContext,
     db::DbManager,
     util::parse_channel_mention_or_id_or_link,
@@ -33,7 +33,7 @@ pub async fn guild_config(ctx: CommandContext<'_>, args: &str) -> anyhow::Result
 
     let (subcommand, args) = args.split_once(' ').unwrap_or((args, ""));
 
-    match subcommand {
+    match subcommand.trim() {
         "bounty-submission-channel" => {
             set_channel_common(
                 ctx,
@@ -79,6 +79,7 @@ pub async fn guild_config(ctx: CommandContext<'_>, args: &str) -> anyhow::Result
             )
             .await
         }
+        "" => reply_with_guild_config(ctx).await,
         _ => {
             ctx.message
                 .reply(
@@ -150,6 +151,39 @@ where
                     format!("Unset the {channel_name} channel.")
                 },
                 color: SUCCESS,
+            ),
+        )
+        .await?;
+    Ok(())
+}
+
+async fn reply_with_guild_config(ctx: CommandContext<'_>) -> anyhow::Result<()> {
+    let config_string = format!(
+        "**Total bounties ever created:** `{}`\n__Channels__\n**Bounty Submissions:** {}\n**Approval Queue:** {}\n**Claimed Bounties:** {}\n**Completed Bounties:** {}\n**Denied Bounties:** {}",
+        ctx.guild_config.current_bounty_number,
+        ctx.guild_config
+            .bounty_submission_channel
+            .map_or_else(|| "*none*".to_owned(), |id| format!("<#{id}>")),
+        ctx.guild_config
+            .approval_queue_channel
+            .map_or_else(|| "*none*".to_owned(), |id| format!("<#{id}>")),
+        ctx.guild_config
+            .claimed_bounties_channel
+            .map_or_else(|| "*none*".to_owned(), |id| format!("<#{id}>")),
+        ctx.guild_config
+            .completed_bounties_channel
+            .map_or_else(|| "*none*".to_owned(), |id| format!("<#{id}>")),
+        ctx.guild_config
+            .denied_bounties_channel
+            .map_or_else(|| "*none*".to_owned(), |id| format!("<#{id}>")),
+    );
+    ctx.message
+        .reply(
+            ctx.ctx,
+            create_embed!(
+                title: "Bot configuration",
+                description: config_string,
+                color: DEFAULT,
             ),
         )
         .await?;

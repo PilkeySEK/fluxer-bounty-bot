@@ -129,6 +129,7 @@ impl EventHandler for Handler {
             guild_id,
             reaction_handler_tx: &self.reactions_event_handler.tx,
             bounty_workflow_image_url: &self.bounty_workflow_image_url,
+            guild_config: &guild_config,
         };
 
         if let Err(e) = self
