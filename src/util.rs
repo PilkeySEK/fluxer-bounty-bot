@@ -21,7 +21,7 @@ use crate::{
     AVATAR_URL_BASE, STATIC_BASE,
     colors::SUBMISSION_PENDING,
     db::{
-        bounties::{BountyNum, BountySubmissionContent},
+        bounties::{BountyNum, BountyState, BountySubmissionContent},
         guilds::{BountyInfoKey, BountySubmissionFormat},
     },
 };
@@ -112,6 +112,7 @@ pub fn bounty_content_to_message(
     format: &BountySubmissionFormat,
     bounty_number: BountyNum,
     created_at: DateTime<Utc>,
+    state: BountyState,
 ) -> impl Into<CreateMessageBody> {
     let mut content = content.iter().collect::<Vec<_>>();
     content.sort();
@@ -168,7 +169,7 @@ pub fn bounty_content_to_message(
     embed.footer = Some(EmbedFooter {
         icon_url: None,
         proxy_icon_url: None,
-        text: bounty_number.to_string(),
+        text: format!("{bounty_number} - {state}"),
     });
     embed.timestamp = Some(created_at.into());
     embed

@@ -74,6 +74,7 @@ pub async fn handle_submission_create(
                     &guild_config.bounty_submission_format,
                     bounty_number,
                     now,
+                    BountyState::Pending,
                 ),
             )
             .await;

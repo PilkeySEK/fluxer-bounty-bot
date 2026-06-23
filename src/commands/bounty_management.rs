@@ -92,6 +92,7 @@ pub async fn complete_bounty(ctx: CommandContext<'_>, args: &str) -> anyhow::Res
                             &ctx.guild_config.bounty_submission_format,
                             bounty.bounty_number,
                             bounty.created_at,
+                            BountyState::Completed,
                         ),
                     )
                     .await?,

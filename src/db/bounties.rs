@@ -94,7 +94,7 @@ impl DbManager {
     }
 }
 
-#[derive(strum::Display, strum::EnumString, PartialEq, Eq)]
+#[derive(strum::Display, strum::EnumString, PartialEq, Eq, Copy, Clone)]
 pub enum BountyState {
     /// The bounty has been implemented (implies Approved).
     Completed,
