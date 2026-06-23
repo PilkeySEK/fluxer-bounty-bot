@@ -23,6 +23,7 @@ use crate::{
     util::{bounty_content_to_message, parse_message_content_as_submission},
 };
 
+#[expect(clippy::too_many_lines)]
 pub async fn handle_submission_create(
     ctx: &Context,
     message: &CachedMessageCreate,

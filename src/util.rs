@@ -107,6 +107,7 @@ pub fn parse_message_content_as_submission(
     content
 }
 
+#[expect(clippy::too_many_arguments, reason = "so what?")]
 pub fn bounty_content_to_message(
     content: &BountySubmissionContent,
     created_by: either::Either<PartialUser, Id<UserMarker>>,

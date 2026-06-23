@@ -138,6 +138,7 @@ pub struct BountyRelatedMessage {
 pub struct Bounty {
     pub bounty_id: i64,
     pub bounty_number: BountyNum,
+    #[expect(unused)]
     pub guild_id: Id<GuildMarker>,
     pub created_by: Id<UserMarker>,
     pub content: BountySubmissionContent,
