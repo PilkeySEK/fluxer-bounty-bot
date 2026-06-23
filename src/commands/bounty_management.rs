@@ -13,43 +13,12 @@ use crate::{
     util::{
         bounty_content_to_message,
         confirmation::{MaybeExpired, confirmation},
+        get_bounty_num_from_args,
         user_arg::parse_user_arg,
     },
 };
 
 // TODO: When replying to a message and not providing the bounty number, try to get the bounty from the replied-to message.
-
-macro_rules! get_bounty_num_from_args {
-    ($ctx:expr, $args:expr, $operation:expr) => {{
-        let args = $args.trim();
-        let (num, rest) = args.split_once(' ').unwrap_or((args, ""));
-        if num.is_empty() {
-            fluxer_neptunium::exts::MessageExt::reply(
-                    &*$ctx.message.message,
-                    $ctx.ctx,
-                    fluxer_neptunium::create_embed!(
-                        description: format!("Provide a bounty ID to {} that bounty.", $operation),
-                        color: $crate::colors::FAILURE,
-                    ),
-                )
-                .await?;
-            return Ok(());
-        }
-        let Ok(bounty_num): Result<$crate::db::bounties::BountyNum, ()> = std::str::FromStr::from_str(num) else {
-            fluxer_neptunium::exts::MessageExt::reply(
-                    &*$ctx.message.message,
-                    $ctx.ctx,
-                    fluxer_neptunium::create_embed!(
-                        description: "Could not parse the bounty ID.",
-                        color: $crate::colors::FAILURE,
-                    ),
-                )
-                .await?;
-            return Ok(());
-        };
-        (bounty_num, rest)
-    }};
-}
 
 pub async fn complete_bounty(ctx: CommandContext<'_>, args: &str) -> anyhow::Result<()> {
     let new_channel = ctx.guild_config.completed_bounties_channel;

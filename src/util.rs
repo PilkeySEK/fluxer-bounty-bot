@@ -30,6 +30,40 @@ use crate::{
 pub mod confirmation;
 pub mod user_arg;
 
+macro_rules! get_bounty_num_from_args {
+    ($ctx:expr, $args:expr, $operation:expr) => {{
+        let args = $args.trim();
+        let (num, rest) = args.split_once(' ').unwrap_or((args, ""));
+        if num.is_empty() {
+            fluxer_neptunium::exts::MessageExt::reply(
+                    &*$ctx.message.message,
+                    $ctx.ctx,
+                    fluxer_neptunium::create_embed!(
+                        description: format!("Provide a bounty ID to {} that bounty.", $operation),
+                        color: $crate::colors::FAILURE,
+                    ),
+                )
+                .await?;
+            return Ok(());
+        }
+        let Ok(bounty_num): Result<$crate::db::bounties::BountyNum, ()> = std::str::FromStr::from_str(num) else {
+            fluxer_neptunium::exts::MessageExt::reply(
+                    &*$ctx.message.message,
+                    $ctx.ctx,
+                    fluxer_neptunium::create_embed!(
+                        description: "Could not parse the bounty ID.",
+                        color: $crate::colors::FAILURE,
+                    ),
+                )
+                .await?;
+            return Ok(());
+        };
+        (bounty_num, rest)
+    }};
+}
+
+pub(crate) use get_bounty_num_from_args;
+
 pub fn parse_channel_mention_or_id_or_link(
     input: &str,
 ) -> Option<(Option<Id<GuildMarker>>, Id<ChannelMarker>)> {
@@ -153,8 +187,7 @@ pub fn bounty_content_to_message(
         description.push_str("**Bounty Amount (USD)**\n");
         let mut total = 0.0;
         for stakeholder in stakeholders {
-            #[expect(clippy::cast_precision_loss)]
-            let amount = stakeholder.amount as f64;
+            let amount = f64::from(stakeholder.amount);
             total += amount;
             if let Err(e) = writeln!(
                 description,

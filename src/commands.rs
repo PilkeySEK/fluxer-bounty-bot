@@ -32,6 +32,7 @@ use crate::{
 };
 
 pub mod bounty_management;
+pub mod bounty_stakeholders;
 pub mod guild_config;
 pub mod misc;
 
@@ -276,6 +277,11 @@ pub fn new_dispatcher_with_commands() -> CommandDispatcher {
             ],
             BotPermissions::empty(),
             Arc::new(misc::bounty_workflow),
+        ),
+        (
+            &["stakeholder"],
+            BotPermissions::MANAGE_BOUNTIES,
+            Arc::new(bounty_stakeholders::bounty_stakeholder),
         ),
     ])
 }
