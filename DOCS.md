@@ -1,81 +1,90 @@
-# Bounty bot
-Documentation for the bounty bot developed for the "Fluxer Wild West" community.
+# Bounty Bot
+Documentation for the Bounty Bot developed for the Fluxer Wild West (FWW) community.
 
-Where "FWW" = "Fluxer Wild West"
+> [!Note]
+>
+> "FWW" stands for "Fluxer Wild West"
 
 ## Summary
-The bot shares major similarities with the "FluxBug" bot in the "Desktop Canary Testers" and "Fluxer Mobile" official communities, but instead of bug reports it is used for dev bounties. There is a template for submitting bounties which is sent in a channel. If the template is correct, the bounty bot will then post it in the channel for pending bounties. New bounties need to be approved by FWW Staff before being sent in the channel for unclaimed bounties. Any bounty hunter can self-assign a bounty. Stakeholders can request to be added with a specified sum of money (the details of how the money is transferred and handled are not in scope for this bot, at least currently). Once completed (e.g. merged into Fluxer), FWW Staff mark the bounty as completed (and it will be moved to the channel for completed bounties) and the bounty hunter should be paid.
+Bounty Bot shares major similarities with the "FluxBug" bot in the "Desktop Canary Testers" and "Fluxer Mobile" official communities, but instead of bug reports it is used for bounties. There is a template for submitting bounties which is sent in a channel. If the template is correct, the bounty bot will then post it in the channel for approval queue bounties. New bounties need to be approved by Fluxer Staff and FWW Staff before being sent in the channel for unclaimed bounties. Any bounty hunter can self-assign a bounty. Stakeholders can request to be added with a specified sum of money. Once completed (e.g. merged into Fluxer repository), FWW Staff mark the bounty as completed (and it will be moved to the channel for completed bounties), and the assigned bounty hunter gets paid.
 
-## What is a bounty, exactly?
-Each bounty has the following information attached to it:
-* The bounty ID which is unique across the whole community
-* Who originally submitted the bounty
-* The content: Title, Due Date (Deadline), Issue URL, Additional Info, Judging Criteria and Requested Amount (Pay). Some of this information may be optional.
-* The state: Completed, Approved, Pending or Rejected
-* When the bounty was created
+> [!Important]
+>
+> Payment handling is managed separately and is outside this bot's scope.
 
-## What is a stakeholder?
-A "stakeholder" is someone who pays money for the completion of a bounty.
+## What is a Bounty, exactly?
+A bounty is a paid task linked to a project issue. All bounties require approval from both Fluxer Staff and FWW Staff before being listed for hunters.
 
-## What is a bounty hunter?
-A bounty hunter is someone who is allowed to self-assign bounties for themselves to work on. They need to be approved by FWW Staff first.
+**Each bounty includes:**
+- **Bounty ID:** Unique ID across the community
+- **Creator:** Community member who created or submitted the bounty
+- **Content:** Title, Due Date, Issue URL, Additional Information, Judging Criteria, and Bounty Amount
+- **Status:** Pending, Approved, Assigned, Completed, or Rejected
+- **Creation date:** When the bounty was submitted
+
+## What is a Stakeholder?
+A "stakeholder" is a community member who contributes funds to a bounty.
+
+## What is a Bounty Creator?
+A "bounty creator" is a community member who submits a new bounty for an issue.
+
+## What is a Bounty Hunter?
+A "bounty hunter" is a community member who completes bounties. Hunters can self-assign approved bounties to work on them.
 
 ## Permissions
-For many commands, the user needs certain permissions. Currently, there is no way to configure them but this will be added very soon. FWW Administrators (in Fluxer) always have all permissions.
+Commands require specific roles and permissions. FWW Administrators always have all permissions. 
+
+> [!Note]
+>
+> Permission configuration is coming soon.
 
 ## Commands
-Now follows a complete list of all commands. The notation used to specify command syntax is the same as the one used in the minecraft wiki: https://minecraft.wiki/w/Commands#Syntax
+The following is a complete command reference. Command syntax follows the [Minecraft Wiki convention](https://minecraft.wiki/w/Commands#Syntax). The default prefix is `b!` (currently non-configurable).
 
-The prefix will be omitted (set to `b!` by default, currently there is no way to change it).
+### Community Management
 
-### Community management
-These commands require the "Manage community configuration" permission.
+> [!Important]
+> Requires **Administrator** permission.
 
-`config bounty-submission-channel [<channel> | reset]` - Set or reset the channel where bounty submissions should be sent by people to create new bounties.
+| Command Syntax | Description |
+| --- | --- |
+| `config` | Display the current community configuration. |
+| `config bounty-submission-channel [<channel> \| reset]` | Set or reset the channel where bounty creators submit new bounties. |
+| `config approval-queue-channel [<channel> \| reset]` | Set or reset the approval queue channel where submitted bounties await review. |
+| `config approved-bounties-channel [<channel> \| reset]` | Set or reset the channel where approved bounties are displayed. |
+| `config assigned-bounties-channel [<channel> \| reset]` | Set or reset the channel where assigned bounties are displayed. |
+| `config completed-bounties-channel [<channel> \| reset]` | Set or reset the channel where completed bounties are archived. |
+| `config rejected-bounties-channel [<channel> \| reset]` | Set or reset the channel where rejected bounties are archived. |
 
-`config approval-queue-channel [<channel> | reset]` - Set or reset the channel where bounties will be sent after being submitted, the approval queue.
+_**Aliases for `config`:** `communityconfig`, `community-config`, `guildconfig`, `guild-config`, `serverconfig`, `server-config`, `cfg`_
 
-`config approved-bounties-channel [<channel> | reset]` - Set or reset the channel where bounties will be sent after being approved.
-
-`config claimed-bounties-channel [<channel> | reset]` - Set or reset the channel where bounties that have been claimed by a bounty hunter will be sent.
-
-`config completed-bounties-channel [<channel> | reset]` - Set or reset the channel where completed bounties will be sent.
-
-`config (rejected-bounties-channel | denied-bounties-channel) [<channel> | reset]` - Set or reset the channel where rejected bounties will be sent.
-
-`config` - The bot will reply with the current community configuration.
-
-**Alises of `config`:** `communityconfig`, `community-config`, `guildconfig`, `guild-config`, `serverconfig`, `server-config`, `cfg` 
-
-### Misc commands
-These commands don't require any permissions.
-
-`ping` - Pong!
-
-`bounty-workflow` - Replies with a flowchart of the current workflow for a bounty. **Aliases:** `bountyworkflow`, `workflow`, `bounty-workflow-image`
-
-### Bounty commands
+### Bounty Management
 Permissions are specified for each command.
 
-`complete <bounty id>` (Manage Bounties) - Mark a bounty as completed and move it to the channel for completed bounties. **Aliases:** `complete-bounty`, `bounty-complete`
+| Command Syntax | Role | Description | Aliases |
+| --- | --- | --- | --- |
+| `self-assign <bounty_id>` | Bounty Hunter | Assign an approved bounty to yourself. Only works if the bounty is unassigned. _(Unassigning not yet supported)_ | `selfassign` |
+| `assign <bounty_id> <user>` | Bounty Manager | Assign a bounty to a specific community member, even if already assigned. _(Unassigning not yet supported)_ | `assign-to`, `assign-to-bounty`, `bounty-assign` |
+| `approve <bounty_id>` | Bounty Manager | Approve a pending bounty and move it to the approved bounties channel. | `approve-bounty`, `bounty-approve` |
+| `complete <bounty_id>` | Bounty Manager | Mark a bounty as completed and move it to the completed bounties channel. | `complete-bounty`, `bounty-complete` |
+| `reject <bounty_id>` | Bounty Manager | Reject a bounty and move it to the rejected bounties channel. | `deny`, `reject-bounty`, `bounty-reject`, `deny-bounty`, `bounty-deny` |
+| `delete <bounty_id>` | Bounty Manager | ‼️ Permanently delete a bounty. **(Cannot be undone)** | `delete-bounty`, `deletebounty`,  `removebounty`, `bounty-delete`, `bountydel`, `bountyrm`, `rmbounty`, `delbounty` |
+| `stakeholder add <bounty_id> <amount> <user> [note]` | Bounty Manager | Add a stakeholder contribution to a bounty. A community member can have multiple contributions. Format: amount as a number, `$` prefix, or `ct` suffix _(amounts default to USD)_. | | 
+| `stakeholder remove <bounty_id> <user>` | Bounty Manager | ‼️ Remove all stakeholder contributions from a community member on a bounty. **(Cannot be undone)** | `stakeholder rm` |
 
-`approve <bounty id>` (Manage Bounties) - Approve a bounty and move it to the channel for approved bounties. **Aliases:** `approve-bounty`, `bounty-approve`
+### Misc commands
+No permissions required.
 
-`reject <bounty id>` (Manage Bounties) - Reject/Deny a bounty and move it to the channel for rejected bounties. **Aliases:** `deny`, `reject-bounty`, `bounty-reject`, `deny-bounty`, `bounty-deny`
+| Command Syntax | Description |
+| --- | --- |
+| `bounty-workflow` | Display a flowchart of the bounty workflow. |
+| `ping` | Pong! |
 
-`delete <bounty id>` (Manage Bounties) - Delete a bounty fully. Will delete the message for the bounty in the channel where it is currently in. This cannot be undone. **Aliases:** `delete-bounty`, `deletebounty`,  `removebounty`, `bounty-delete`, `bountydel`, `bountyrm`, `rmbounty`, `delbounty`
-
-`assign <bounty id> <user>` (Manage Bounties) - Assign a bounty to a specific user, even if someone is already assigned to that bounty. Currently, users cannot be unassigned. **Aliases:** `assign-to`, `assign-to-bounty`, `bounty-assign`
-
-`self-assign <bounty id>` (Bounty Hunter) - Assign a bounty to yourself. Only allowed if the bounty is in the "approved" state. Only possible when someone is not already assigned to the bounty. Currently, someone cannot unassign themselves from a bounty. **Aliases:** `selfassign`
-
-`stakeholder add <bounty id> <amount> <user> [note]` (Manage Bounties) - Add a stakeholder to the bounty. Note that one user can have multiple "stakeholder positions". `amount` can be either just a number, start with a `$` or end with `ct`. If `amount` is just a number without a dollar or cent sign, it will be interpreted as dollars.
-
-`stakeholder (remove | rm) <bounty id> <user>` (Manage Bounties) - Remove a stakeholder from a bounty. This will remove all of the stakeholder's "stakeholder positions" from the bounty. Cannot be undone.
+**Aliases for `bounty-workflow`:** `bountyworkflow`, `workflow`, `bounty-workflow-image`
 
 ## TODOs
-* Unassigning people and self from bounties
-* Setting the command prefix
-* Managing permissions (linked to roles or users)
-* Editing bounties
-* Fix duplicate due date
+- [ ] Unassign bounties (for bounty hunters and managers)
+- [ ] Configurable command prefix
+- [ ] Role-based permission management
+- [ ] Edit existing bounties
+- [ ] Fix duplicate due date
