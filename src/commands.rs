@@ -234,6 +234,7 @@ pub fn new_dispatcher_with_commands() -> CommandDispatcher {
                 "delete",
                 "delete-bounty",
                 "deletebounty",
+                "removebounty",
                 "bounty-delete",
                 "bountydelete",
                 "bountydel",

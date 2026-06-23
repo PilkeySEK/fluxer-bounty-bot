@@ -245,6 +245,39 @@ pub async fn self_assign_to_bounty(ctx: CommandContext<'_>, args: &str) -> anyho
     let (bounty_num, _rest) = get_bounty_num_from_args!(ctx, args, "assign");
     let user_id = ctx.guild_member.id;
 
+    let Some(bounty) = ctx.db.get_bounty(ctx.guild_id, bounty_num).await? else {
+        ctx.message
+            .reply(
+                ctx.ctx,
+                create_embed!(
+                    description: "A bounty with that ID does not exist.",
+                    color: FAILURE,
+                ),
+            )
+            .await?;
+        return Ok(());
+    };
+
+    if let Some(assigned_to) = bounty.assigned_to {
+        ctx.message
+            .reply(
+                ctx.ctx,
+                create_embed!(
+                    description: format!("The bounty is already assigned to <@{assigned_to}>."),
+                    color: FAILURE,
+                ),
+            )
+            .await?;
+        return Ok(());
+    }
+    if bounty.state != BountyState::Approved {
+        ctx.message.reply(ctx.ctx, create_embed!(
+            description: "You cannot assign yourself to this bounty because it is not in the correct state.",
+            color: FAILURE,
+        )).await?;
+        return Ok(());
+    }
+
     let query_result = ctx
         .db
         .assign_user_to_bounty(ctx.guild_id, bounty_num, Some(user_id))
