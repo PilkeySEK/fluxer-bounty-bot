@@ -13,7 +13,7 @@ CREATE TABLE bounties (
     state TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL,
     -- The "claimer" or "bounty hunter" is the person who will or has completed the implementation of the bounty
-    claimed_by BIGINT,
+    assigned_to BIGINT,
     related_message_id BIGINT,
     related_channel_id BIGINT
 );

@@ -97,7 +97,7 @@ pub async fn handle_submission_create(
     };
     let bounty = BountyCreateData {
         bounty_number,
-        claimed_by: None,
+        assigned_to: None,
         content: parsed,
         guild_id,
         state: BountyState::Pending,

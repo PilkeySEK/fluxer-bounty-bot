@@ -52,6 +52,15 @@ pub async fn guild_config(ctx: CommandContext<'_>, args: &str) -> anyhow::Result
             )
             .await
         }
+        "approved-bounties-channel" => {
+            set_channel_common(
+                ctx,
+                args,
+                DbManager::set_approved_bounties_channel,
+                "approved bounties",
+            )
+            .await
+        }
         "claimed-bounties-channel" => {
             set_channel_common(
                 ctx,

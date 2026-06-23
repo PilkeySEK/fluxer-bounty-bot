@@ -27,6 +27,7 @@ use crate::{
 };
 
 pub mod confirmation;
+pub mod user_arg;
 
 pub fn parse_channel_mention_or_id_or_link(
     input: &str,

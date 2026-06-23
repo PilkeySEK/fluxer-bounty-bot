@@ -71,6 +71,23 @@ impl DbManager {
         self.cached_guild_config.invalidate(&guild_id);
         Ok(())
     }
+    pub async fn set_approved_bounties_channel(
+        &self,
+        guild_id: Id<GuildMarker>,
+        channel_id: Option<Id<ChannelMarker>>,
+    ) -> anyhow::Result<()> {
+        sqlx::query!(
+            "UPDATE guilds
+            SET approved_bounties_channel = $1
+            WHERE guild_id = $2",
+            channel_id.map(|id| id.into_inner().cast_signed()),
+            guild_id.into_inner().cast_signed(),
+        )
+        .execute(&self.pool)
+        .await?;
+        self.cached_guild_config.invalidate(&guild_id);
+        Ok(())
+    }
     pub async fn set_claimed_bounties_channel(
         &self,
         guild_id: Id<GuildMarker>,

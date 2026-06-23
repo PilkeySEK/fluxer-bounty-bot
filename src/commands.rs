@@ -230,6 +230,26 @@ pub fn new_dispatcher_with_commands() -> CommandDispatcher {
         ),
         (
             &[
+                "delete",
+                "delete-bounty",
+                "deletebounty",
+                "bounty-delete",
+                "bountydelete",
+                "bountydel",
+                "bountyrm",
+                "rmbounty",
+                "delbounty",
+            ],
+            BotPermissions::MANAGE_BOUNTIES,
+            Arc::new(bounty_management::delete_bounty),
+        ),
+        (
+            &["assign", "assign-to", "assign-to-bounty", "bounty-assign"],
+            BotPermissions::MANAGE_BOUNTIES,
+            Arc::new(bounty_management::assign_to_bounty),
+        ),
+        (
+            &[
                 "config",
                 "communityconfig",
                 "community-config",

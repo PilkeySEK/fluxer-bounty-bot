@@ -1,3 +1,4 @@
+use anyhow::Context as _;
 use fluxer_neptunium::{
     create_embed,
     exts::{ChannelExt, MessageExt, UserExt},
@@ -6,10 +7,14 @@ use fluxer_neptunium::{
 };
 
 use crate::{
-    colors::{FAILURE, SUCCESS},
+    colors::{DEFAULT, FAILURE, SUCCESS},
     commands::CommandContext,
     db::bounties::{BountyRelatedMessage, BountyState},
-    util::bounty_content_to_message,
+    util::{
+        bounty_content_to_message,
+        confirmation::{MaybeExpired, confirmation},
+        user_arg::parse_user_arg,
+    },
 };
 
 // TODO: When replying to a message and not providing the bounty number, try to get the bounty from the replied-to message.
@@ -17,7 +22,8 @@ use crate::{
 macro_rules! get_bounty_num_from_args {
     ($ctx:expr, $args:expr, $operation:expr) => {{
         let args = $args.trim();
-        if args.is_empty() {
+        let (num, rest) = args.split_once(' ').unwrap_or((args, ""));
+        if num.is_empty() {
             fluxer_neptunium::exts::MessageExt::reply(
                     &*$ctx.message.message,
                     $ctx.ctx,
@@ -29,7 +35,7 @@ macro_rules! get_bounty_num_from_args {
                 .await?;
             return Ok(());
         }
-        let Ok(bounty_num): Result<$crate::db::bounties::BountyNum, ()> = std::str::FromStr::from_str(args) else {
+        let Ok(bounty_num): Result<$crate::db::bounties::BountyNum, ()> = std::str::FromStr::from_str(num) else {
             fluxer_neptunium::exts::MessageExt::reply(
                     &*$ctx.message.message,
                     $ctx.ctx,
@@ -41,7 +47,7 @@ macro_rules! get_bounty_num_from_args {
                 .await?;
             return Ok(());
         };
-        bounty_num
+        (bounty_num, rest)
     }};
 }
 
@@ -67,7 +73,7 @@ async fn set_bounty_state_common(
     new_state: BountyState,
     new_channel: Option<Id<ChannelMarker>>,
 ) -> anyhow::Result<()> {
-    let bounty_num = get_bounty_num_from_args!(ctx, args, operation);
+    let (bounty_num, _rest) = get_bounty_num_from_args!(ctx, args, operation);
 
     let Some(bounty) = ctx.db.get_bounty(ctx.guild_id, bounty_num).await? else {
         ctx.message
@@ -151,6 +157,110 @@ async fn set_bounty_state_common(
             ctx.ctx,
             create_embed!(
                 description: format!("Updated `{bounty_num}`, it is now {}", new_state.to_string().to_lowercase()),
+                color: SUCCESS,
+            ),
+        )
+        .await?;
+
+    Ok(())
+}
+
+pub async fn delete_bounty(ctx: CommandContext<'_>, args: &str) -> anyhow::Result<()> {
+    let (bounty_num, _rest) = get_bounty_num_from_args!(ctx, args, "delete");
+    let MaybeExpired::NotExpired(true) = confirmation(
+        &ctx,
+        ctx.message.reply(ctx.ctx, create_embed!(
+            description: format!("This will delete the bounty `{bounty_num}`, which cannot be undone.\nAre you sure?"),
+            color: DEFAULT,
+        )).await?,
+        ctx.guild_member.id)
+        .await?
+    else {
+        return Ok(());
+    };
+    let bounty_data = ctx
+        .db
+        .delete_and_return_bounty(ctx.guild_id, bounty_num)
+        .await
+        .with_context(|| format!("Failed to delete bounty with number {bounty_num}"))?;
+    let Some(bounty_data) = bounty_data else {
+        ctx.message
+            .reply(
+                ctx.ctx,
+                create_embed!(
+                    description: "Bounty not found.",
+                    color: FAILURE,
+                ),
+            )
+            .await?;
+        return Ok(());
+    };
+    if let Some(BountyRelatedMessage {
+        channel_id,
+        message_id,
+    }) = bounty_data.related_message
+    {
+        ctx.ctx.get_http_client()
+            .execute(DeleteMessage {
+                channel_id,
+                message_id,
+            })
+            .await
+            .with_context(|| format!("Failed to delete related message of bounty {} message_id {message_id} and channel_id {channel_id}", bounty_data.bounty_id))?;
+    }
+    ctx.message
+        .reply(
+            ctx.ctx,
+            create_embed!(
+                description: format!("Deleted bounty `{bounty_num}`."),
+                color: SUCCESS,
+            ),
+        )
+        .await?;
+    Ok(())
+}
+
+pub async fn assign_to_bounty(ctx: CommandContext<'_>, args: &str) -> anyhow::Result<()> {
+    let (bounty_num, rest) = get_bounty_num_from_args!(ctx, args, "assign");
+
+    let MaybeExpired::NotExpired(user_id) = parse_user_arg(&ctx, rest.trim()).await? else {
+        return Ok(());
+    };
+    let Some(user_id) = user_id else {
+        ctx.message
+            .reply(
+                ctx.ctx,
+                create_embed!(
+                    description: "Could not find a user matching the query.",
+                    color: FAILURE,
+                ),
+            )
+            .await?;
+        return Ok(());
+    };
+
+    let query_result = ctx
+        .db
+        .assign_user_to_bounty(ctx.guild_id, bounty_num, Some(user_id))
+        .await?;
+    if query_result.rows_affected() == 0 {
+        ctx.message
+            .reply(
+                ctx.ctx,
+                create_embed!(
+                    description: "A bounty with that ID does not exist.",
+                    color: FAILURE,
+                ),
+            )
+            .await?;
+        return Ok(());
+    }
+
+    ctx.message
+        .reply(
+            ctx.ctx,
+            create_embed!(
+                description: format!("Assigned <@{user_id}> to the bounty `{bounty_num}`."),
                 color: SUCCESS,
             ),
         )
