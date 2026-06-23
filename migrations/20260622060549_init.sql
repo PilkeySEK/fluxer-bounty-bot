@@ -31,9 +31,10 @@ CREATE TABLE guilds (
     guild_id BIGINT PRIMARY KEY,
     bounty_submission_channel BIGINT,
     approval_queue_channel BIGINT,
+    approved_bounties_channel BIGINT,
     claimed_bounties_channel BIGINT,
     completed_bounties_channel BIGINT,
-    denied_bounties_channel BIGINT,
+    rejected_bounties_channel BIGINT,
     command_prefixes TEXT[] NOT NULL DEFAULT ARRAY['b!'],
     -- Serialized and deserialized from Rust
     bounty_submission_format JSONB NOT NULL,

@@ -70,12 +70,12 @@ pub async fn guild_config(ctx: CommandContext<'_>, args: &str) -> anyhow::Result
             )
             .await
         }
-        "denied-bounties-channel" => {
+        "rejected-bounties-channel" | "denied-bounties-channel" => {
             set_channel_common(
                 ctx,
                 args,
-                DbManager::set_denied_bounties_channel,
-                "denied bounties",
+                DbManager::set_rejected_bounties_channel,
+                "rejected bounties",
             )
             .await
         }
@@ -174,7 +174,7 @@ async fn reply_with_guild_config(ctx: CommandContext<'_>) -> anyhow::Result<()> 
             .completed_bounties_channel
             .map_or_else(|| "*none*".to_owned(), |id| format!("<#{id}>")),
         ctx.guild_config
-            .denied_bounties_channel
+            .rejected_bounties_channel
             .map_or_else(|| "*none*".to_owned(), |id| format!("<#{id}>")),
     );
     ctx.message

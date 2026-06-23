@@ -212,6 +212,23 @@ pub fn new_dispatcher_with_commands() -> CommandDispatcher {
             Arc::new(bounty_management::complete_bounty),
         ),
         (
+            &["approve", "approve-bounty", "bounty-approve"],
+            BotPermissions::MANAGE_BOUNTIES,
+            Arc::new(bounty_management::approve_bounty),
+        ),
+        (
+            &[
+                "reject",
+                "deny",
+                "reject-bounty",
+                "bounty-reject",
+                "deny-bounty",
+                "bounty-deny",
+            ],
+            BotPermissions::MANAGE_BOUNTIES,
+            Arc::new(bounty_management::reject_bounty),
+        ),
+        (
             &[
                 "config",
                 "communityconfig",

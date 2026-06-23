@@ -105,14 +105,14 @@ impl DbManager {
         self.cached_guild_config.invalidate(&guild_id);
         Ok(())
     }
-    pub async fn set_denied_bounties_channel(
+    pub async fn set_rejected_bounties_channel(
         &self,
         guild_id: Id<GuildMarker>,
         channel_id: Option<Id<ChannelMarker>>,
     ) -> anyhow::Result<()> {
         sqlx::query!(
             "UPDATE guilds
-            SET denied_bounties_channel = $1
+            SET rejected_bounties_channel = $1
             WHERE guild_id = $2",
             channel_id.map(|id| id.into_inner().cast_signed()),
             guild_id.into_inner().cast_signed(),
@@ -183,9 +183,10 @@ pub struct GuildConfig {
     pub guild_id: Id<GuildMarker>,
     pub bounty_submission_channel: Option<Id<ChannelMarker>>,
     pub approval_queue_channel: Option<Id<ChannelMarker>>,
+    pub approved_bounties_channel: Option<Id<ChannelMarker>>,
     pub claimed_bounties_channel: Option<Id<ChannelMarker>>,
     pub completed_bounties_channel: Option<Id<ChannelMarker>>,
-    pub denied_bounties_channel: Option<Id<ChannelMarker>>,
+    pub rejected_bounties_channel: Option<Id<ChannelMarker>>,
     pub command_prefixes: Vec<String>,
     pub bounty_submission_format: BountySubmissionFormat,
     pub command_channels: Option<Vec<Id<ChannelMarker>>>,
@@ -203,14 +204,17 @@ impl TryFrom<GuildConfigSchema> for GuildConfig {
             approval_queue_channel: value
                 .approval_queue_channel
                 .map(|id| id.cast_unsigned().into()),
+            approved_bounties_channel: value
+                .approved_bounties_channel
+                .map(|id| id.cast_unsigned().into()),
             claimed_bounties_channel: value
                 .claimed_bounties_channel
                 .map(|id| id.cast_unsigned().into()),
             completed_bounties_channel: value
                 .completed_bounties_channel
                 .map(|id| id.cast_unsigned().into()),
-            denied_bounties_channel: value
-                .denied_bounties_channel
+            rejected_bounties_channel: value
+                .rejected_bounties_channel
                 .map(|id| id.cast_unsigned().into()),
             command_prefixes: value.command_prefixes,
             bounty_submission_format: serde_json::from_value(value.bounty_submission_format)?,
@@ -230,9 +234,10 @@ pub(super) struct GuildConfigSchema {
     pub guild_id: i64,
     pub bounty_submission_channel: Option<i64>,
     pub approval_queue_channel: Option<i64>,
+    pub approved_bounties_channel: Option<i64>,
     pub claimed_bounties_channel: Option<i64>,
     pub completed_bounties_channel: Option<i64>,
-    pub denied_bounties_channel: Option<i64>,
+    pub rejected_bounties_channel: Option<i64>,
     pub command_prefixes: Vec<String>,
     pub bounty_submission_format: serde_json::Value,
     pub command_channels: Option<Vec<i64>>,
