@@ -42,29 +42,35 @@ A "bounty hunter" is a community member who completes bounties. Hunters can self
 
 Commands require specific roles and permissions. FWW Administrators always have all permissions.
 
-> [!Note]
->
-> Permission configuration is coming soon.
+| Command syntax                          | Description                                 | Aliases                                   |
+| --------------------------------------- | ------------------------------------------- | ----------------------------------------- |
+| `add-permission <role> <permission>`    | Add a bounty bot permission to a role.      | _none_                                    |
+| `remove-permission <role> <permission>` | Remove a bounty bot permission from a role. | `rm-permission`                           |
+| `permissions`                           | List the community's permissions.           | `perms`, `list-perms`, `list-permissions` |
+
+`permission` can be one of `create-bounty`, `manage-bounties`, `manage-community-config`, `bounty-hunter` (other spellings are supported but that would be too much to document. For a real full list of the permission names, see `commands::permission_management::parse_permission_str`)
+
+`role` can be a role @mention, a role ID, `@everyone` or `everyone`.
 
 ## Commands
 
-The following is a complete command reference. Command syntax follows the [Minecraft Wiki convention](https://minecraft.wiki/w/Commands#Syntax). The default prefix is `b!` (currently non-configurable).
+The following is a complete command reference. Command syntax follows the [Minecraft Wiki convention](https://minecraft.wiki/w/Commands#Syntax). The default prefix is `b!`.
 
 ### Community Management
 
 > [!Important]
-> Requires **Administrator** permission.
+> Requires **Administrator** permission. Or `MANAGE_GUILD_CONFIG` permission.
 
-| Command Syntax                                           | Description                                                                    |
-| -------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `config`                                                 | Display the current community configuration.                                   |
-| `config bounty-submission-channel [<channel> \| reset]`  | Set or reset the channel where bounty creators submit new bounties.            |
-| `config approval-queue-channel [<channel> \| reset]`     | Set or reset the approval queue channel where submitted bounties await review. |
-| `config approved-bounties-channel [<channel> \| reset]`  | Set or reset the channel where approved bounties are displayed.                |
-| `config assigned-bounties-channel [<channel> \| reset]`  | Set or reset the channel where assigned bounties are displayed.                |
-| `config completed-bounties-channel [<channel> \| reset]` | Set or reset the channel where completed bounties are archived.                |
-| `config rejected-bounties-channel [<channel> \| reset]`  | Set or reset the channel where rejected bounties are archived.                 |
-| `config prefix <new_prefix>` | Set the command prefix (default: `b!`). Independent of the current prefix, you can always run commands by @mentioning the bot. |
+| Command Syntax                                           | Description                                                                                                                    |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `config`                                                 | Display the current community configuration.                                                                                   |
+| `config bounty-submission-channel [<channel> \| reset]`  | Set or reset the channel where bounty creators submit new bounties.                                                            |
+| `config approval-queue-channel [<channel> \| reset]`     | Set or reset the approval queue channel where submitted bounties await review.                                                 |
+| `config approved-bounties-channel [<channel> \| reset]`  | Set or reset the channel where approved bounties are displayed.                                                                |
+| `config assigned-bounties-channel [<channel> \| reset]`  | Set or reset the channel where assigned bounties are displayed.                                                                |
+| `config completed-bounties-channel [<channel> \| reset]` | Set or reset the channel where completed bounties are archived.                                                                |
+| `config rejected-bounties-channel [<channel> \| reset]`  | Set or reset the channel where rejected bounties are archived.                                                                 |
+| `config prefix <new_prefix>`                             | Set the command prefix (default: `b!`). Independent of the current prefix, you can always run commands by @mentioning the bot. |
 
 _**Aliases for `config`:** `communityconfig`, `community-config`, `guildconfig`, `guild-config`, `serverconfig`, `server-config`, `cfg`_
 
@@ -72,18 +78,19 @@ _**Aliases for `config`:** `communityconfig`, `community-config`, `guildconfig`,
 
 Permissions are specified for each command.
 
-| Command Syntax                                       | Role           | Description                                                                                                                                                                        | Aliases                                                                                                            |
-| ---------------------------------------------------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `self-assign <bounty_id>`                            | Bounty Hunter  | Assign an approved bounty to yourself. Only works if the bounty is unassigned.                                                                                                     | `selfassign`                                                                                                       |
-| `self-unassign <bounty_id>`                          | Bounty Hunter  | Unassign yourself from a bounty.                                                                                                                                                   | `selfunassign`                                                                                                     |
-| `assign <bounty_id> <user>`                          | Bounty Manager | Assign a bounty to a specific community member, even if already assigned. _(Unassigning not yet supported)_                                                                        | `assign-to`, `assign-to-bounty`, `bounty-assign`                                                                   |
-| `unassign <bounty_id>`                               | Bounty Manager | Unassign whoever is assigned to the specified bouny.                                                                                                                               | `unassign-from`, `unassign-from-bounty`, `bounty-unassign`                                                         |
-| `approve <bounty_id>`                                | Bounty Manager | Approve a pending bounty and move it to the approved bounties channel.                                                                                                             | `approve-bounty`, `bounty-approve`                                                                                 |
-| `complete <bounty_id>`                               | Bounty Manager | Mark a bounty as completed and move it to the completed bounties channel.                                                                                                          | `complete-bounty`, `bounty-complete`                                                                               |
-| `reject <bounty_id>`                                 | Bounty Manager | Reject a bounty and move it to the rejected bounties channel.                                                                                                                      | `deny`, `reject-bounty`, `bounty-reject`, `deny-bounty`, `bounty-deny`                                             |
-| `delete <bounty_id>`                                 | Bounty Manager | ‼️ Permanently delete a bounty. **(Cannot be undone)**                                                                                                                             | `delete-bounty`, `deletebounty`, `removebounty`, `bounty-delete`, `bountydel`, `bountyrm`, `rmbounty`, `delbounty` |
-| `stakeholder add <bounty_id> <amount> <user> [note]` | Bounty Manager | Add a stakeholder contribution to a bounty. A community member can have multiple contributions. Format: amount as a number, `$` prefix, or `ct` suffix _(amounts default to USD)_. |                                                                                                                    |
-| `stakeholder remove <bounty_id> <user>`              | Bounty Manager | ‼️ Remove all stakeholder contributions from a community member on a bounty. **(Cannot be undone)**                                                                                | `stakeholder rm`                                                                                                   |
+| Command Syntax                                       | Role           | Description                                                                                                                                                                                                                  | Aliases                                                                                                            |
+| ---------------------------------------------------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `self-assign <bounty_id>`                            | Bounty Hunter  | Assign an approved bounty to yourself. Only works if the bounty is unassigned.                                                                                                                                               | `selfassign`                                                                                                       |
+| `self-unassign <bounty_id>`                          | Bounty Hunter  | Unassign yourself from a bounty.                                                                                                                                                                                             | `selfunassign`                                                                                                     |
+| `assign <bounty_id> <user>`                          | Bounty Manager | Assign a bounty to a specific community member, even if already assigned. _(Unassigning not yet supported)_                                                                                                                  | `assign-to`, `assign-to-bounty`, `bounty-assign`                                                                   |
+| `unassign <bounty_id>`                               | Bounty Manager | Unassign whoever is assigned to the specified bouny.                                                                                                                                                                         | `unassign-from`, `unassign-from-bounty`, `bounty-unassign`                                                         |
+| `approve <bounty_id>`                                | Bounty Manager | Approve a pending bounty and move it to the approved bounties channel.                                                                                                                                                       | `approve-bounty`, `bounty-approve`                                                                                 |
+| `complete <bounty_id>`                               | Bounty Manager | Mark a bounty as completed and move it to the completed bounties channel.                                                                                                                                                    | `complete-bounty`, `bounty-complete`                                                                               |
+| `reject <bounty_id>`                                 | Bounty Manager | Reject a bounty and move it to the rejected bounties channel.                                                                                                                                                                | `deny`, `reject-bounty`, `bounty-reject`, `deny-bounty`, `bounty-deny`                                             |
+| `delete <bounty_id>`                                 | Bounty Manager | ‼️ Permanently delete a bounty. **(Cannot be undone)**                                                                                                                                                                       | `delete-bounty`, `deletebounty`, `removebounty`, `bounty-delete`, `bountydel`, `bountyrm`, `rmbounty`, `delbounty` |
+| `stakeholder add <bounty_id> <amount> <user> [note]` | Bounty Manager | Add a stakeholder contribution to a bounty. A community member can have multiple contributions. Format: amount as a number, `$` prefix, or `ct` suffix _(amounts default to USD)_.                                           |                                                                                                                    |
+| `stakeholder remove <bounty_id> <user>`              | Bounty Manager | ‼️ Remove all stakeholder contributions from a community member on a bounty. **(Cannot be undone)**                                                                                                                          | `stakeholder rm`                                                                                                   |
+| `edit <bounty_id> <field> [value]`                   | Bounty Manager | Edit a bounty. `field` can be one of `title`, `additional-info`, `proposed-amount`, `due-date`, `issue-url` or `judging_criteria`. If the `value` is not specified, will remove the specified field from the bounty content. | `edit-bounty`                                                                                                      |
 
 ### Misc commands
 
@@ -95,11 +102,3 @@ No permissions required.
 | `ping`            | Pong!                                       |
 
 **Aliases for `bounty-workflow`:** `bountyworkflow`, `workflow`, `bounty-workflow-image`
-
-## TODOs
-
-- [X] Unassign bounties (for bounty hunters and managers)
-- [x] Configurable command prefix
-- [ ] Role-based permission management
-- [ ] Edit existing bounties
-- [x] Fix duplicate due date
