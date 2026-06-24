@@ -299,5 +299,10 @@ pub fn new_dispatcher_with_commands() -> CommandDispatcher {
             BotPermissions::MANAGE_BOUNTIES,
             Arc::new(bounty_management::unassign_from_bounty),
         ),
+        (
+            &["edit", "edit-bounty"],
+            BotPermissions::MANAGE_BOUNTIES,
+            Arc::new(bounty_management::edit_bounty),
+        ),
     ])
 }

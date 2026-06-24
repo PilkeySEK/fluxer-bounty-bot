@@ -1,15 +1,23 @@
 use anyhow::Context as _;
+use chrono::DateTime;
+use enum_map::enum_map;
 use fluxer_neptunium::{
     create_embed,
     exts::{ChannelExt, MessageExt, UserExt},
     http::endpoints::channel::{DeleteMessage, EditMessage},
-    model::id::{Id, marker::ChannelMarker},
+    model::{
+        id::{Id, marker::ChannelMarker},
+        time::timestamp::{Timestamp, representations::Iso8601},
+    },
 };
 
 use crate::{
     colors::{DEFAULT, FAILURE, SUCCESS},
     commands::CommandContext,
-    db::bounties::{BountyRelatedMessage, BountyState},
+    db::{
+        bounties::{BountyRelatedMessage, BountyState},
+        guilds::BountyInfoKey,
+    },
     util::{
         bounty_content_to_message,
         confirmation::{MaybeExpired, confirmation},
@@ -493,5 +501,126 @@ pub async fn self_unassign_from_bounty(ctx: CommandContext<'_>, args: &str) -> a
             ),
         )
         .await?;
+    Ok(())
+}
+
+#[expect(clippy::too_many_lines)]
+pub async fn edit_bounty(ctx: CommandContext<'_>, args: &str) -> anyhow::Result<()> {
+    let field_descriptors = enum_map! {
+        BountyInfoKey::Title => "title",
+        BountyInfoKey::AdditionalInfo => "additional-info",
+        BountyInfoKey::BountyAmount => "proposed-amount",
+        BountyInfoKey::Deadline => "due-date",
+        BountyInfoKey::IssueUrl => "issue-url",
+        BountyInfoKey::JudgingCriteria => "judging-criteria",
+    };
+    let (bounty_num, rest) = get_bounty_num_from_args!(ctx, args, "edit");
+    let rest = rest.trim();
+    let (field_descriptor, value) = rest.split_once(' ').unwrap_or((rest, ""));
+    let value = value.trim();
+    let field_descriptor = field_descriptors.iter().find_map(|(k, v)| {
+        if *v == field_descriptor {
+            Some(k)
+        } else {
+            None
+        }
+    });
+    let Some(field_key) = field_descriptor else {
+        let descriptor_list = field_descriptors
+            .values()
+            .map(|v| format!("`{v}`"))
+            .collect::<Vec<String>>()
+            .join(", ");
+        ctx.message
+            .reply(
+                ctx.ctx,
+                create_embed!(
+                    description: format!("Unknown field. Possible values are: {descriptor_list}"),
+                    color: FAILURE,
+                ),
+            )
+            .await?;
+        return Ok(());
+    };
+    let bounty = ctx.db.get_bounty(ctx.guild_id, bounty_num).await?;
+    let Some(mut bounty) = bounty else {
+        ctx.message
+            .reply(
+                ctx.ctx,
+                create_embed!(
+                    description: "A bounty with that ID does not exist.",
+                    color: FAILURE,
+                ),
+            )
+            .await?;
+        return Ok(());
+    };
+    if field_key == BountyInfoKey::Deadline {
+        let deadline_timestamp = if value.is_empty() {
+            None
+        } else {
+            let Some(timestamp) = Timestamp::<Iso8601>::parse(value) else {
+                ctx.message.reply(ctx.ctx, create_embed!(
+                    description: format!("The timestamp provided in the due date could not be parsed. Make sure to format it in the Fluxer timestamp format."),
+                    color: FAILURE,
+                )).await?;
+                return Ok(());
+            };
+            Some(DateTime::from(timestamp))
+        };
+        bounty.deadline = deadline_timestamp;
+        ctx.db
+            .set_bounty_deadine(bounty.bounty_id, deadline_timestamp)
+            .await?;
+    } else {
+        if value.is_empty() {
+            bounty.content.remove(&field_key);
+        } else {
+            bounty.content.insert(field_key, value.to_owned());
+        }
+        ctx.db
+            .set_bounty_content(bounty.bounty_id, &bounty.content)
+            .await?;
+    }
+
+    if let Some(related_message) = bounty.related_message {
+        let created_by = match bounty.created_by.get_user(ctx.ctx).await {
+            Ok(created_by) => either::Either::Left(created_by.clone_inner()),
+            Err(e) => {
+                tracing::warn!("Error fetching user {}: {e}", bounty.created_by);
+                either::Either::Right(bounty.created_by)
+            }
+        };
+        let embed = bounty_content_to_message(
+            &bounty.content,
+            created_by,
+            &ctx.guild_config.bounty_submission_format,
+            bounty_num,
+            bounty.created_at,
+            bounty.state,
+            bounty.assigned_to,
+            bounty.deadline,
+            ctx.db.list_bounty_stakeholders(bounty.bounty_id).await?,
+        );
+        ctx.ctx
+            .get_http_client()
+            .execute(EditMessage {
+                message_id: related_message.message_id,
+                channel_id: related_message.channel_id,
+                body: embed.into(),
+            })
+            .await?;
+    }
+
+    ctx.message
+        .reply(
+            ctx.ctx,
+            create_embed!(
+                description: format!("Updated the bounty content of `{bounty_num}`."),
+                color: SUCCESS,
+            ),
+        )
+        .await?;
+
     Ok(())
 }

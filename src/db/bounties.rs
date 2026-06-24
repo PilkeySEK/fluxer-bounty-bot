@@ -112,6 +112,40 @@ impl DbManager {
         .execute(&self.pool)
         .await?)
     }
+
+    pub async fn set_bounty_content(
+        &self,
+        bounty_id: i64,
+        content: &BountySubmissionContent,
+    ) -> anyhow::Result<()> {
+        sqlx::query!(
+            "UPDATE bounties
+            SET content = $1
+            WHERE bounty_id = $2",
+            serde_json::to_value(content)?,
+            bounty_id,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn set_bounty_deadine(
+        &self,
+        bounty_id: i64,
+        deadline: Option<DateTime<Utc>>,
+    ) -> anyhow::Result<()> {
+        sqlx::query!(
+            "UPDATE bounties
+            SET deadline = $1
+            WHERE bounty_id = $2",
+            deadline,
+            bounty_id,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
 }
 
 #[derive(strum::Display, strum::EnumString, PartialEq, Eq, Copy, Clone)]
