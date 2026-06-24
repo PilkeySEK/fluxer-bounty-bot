@@ -73,7 +73,7 @@ pub async fn handle_submission_create(
             )).await;
             tokio::time::sleep(Duration::from_secs(10)).await;
             message.delete(ctx).await?;
-            reply_result?;
+            reply_result?.delete(ctx).await?;
             return Ok(());
         };
         Some(DateTime::from(timestamp))

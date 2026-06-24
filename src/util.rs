@@ -163,6 +163,9 @@ pub fn bounty_content_to_message(
             title = Some(value);
             continue;
         }
+        if *key == BountyInfoKey::Deadline {
+            continue;
+        }
         let key_title = format.titles[*key]
             .first()
             .map_or("*no titles for key*", String::as_str);
