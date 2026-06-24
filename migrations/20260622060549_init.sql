@@ -35,7 +35,7 @@ CREATE TABLE guilds (
     claimed_bounties_channel BIGINT,
     completed_bounties_channel BIGINT,
     rejected_bounties_channel BIGINT,
-    command_prefixes TEXT[] NOT NULL DEFAULT ARRAY['b!'],
+    command_prefix TEXT NOT NULL DEFAULT 'b!',
     -- Serialized and deserialized from Rust
     bounty_submission_format JSONB NOT NULL,
     command_channels BIGINT[],

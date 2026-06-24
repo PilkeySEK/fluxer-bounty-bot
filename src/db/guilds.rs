@@ -157,6 +157,26 @@ impl DbManager {
         .await?;
         Ok(BountyNum(num))
     }
+
+    pub async fn set_guild_command_prefix_upsert(
+        &self,
+        guild_id: Id<GuildMarker>,
+        prefix: &str,
+    ) -> anyhow::Result<()> {
+        sqlx::query!(
+            "INSERT INTO guilds (guild_id, bounty_submission_format, command_prefix)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (guild_id) DO UPDATE
+            SET command_prefix = $3",
+            guild_id.into_inner().cast_signed(),
+            serde_json::to_value(&BountySubmissionFormat::default())?,
+            prefix,
+        )
+        .execute(&self.pool)
+        .await?;
+        self.cached_guild_config.invalidate(&guild_id);
+        Ok(())
+    }
 }
 
 // Reordering the fields here will also change the PartialOrd and Ord implementation, be cautious
@@ -204,7 +224,7 @@ pub struct GuildConfig {
     pub claimed_bounties_channel: Option<Id<ChannelMarker>>,
     pub completed_bounties_channel: Option<Id<ChannelMarker>>,
     pub rejected_bounties_channel: Option<Id<ChannelMarker>>,
-    pub command_prefixes: Vec<String>,
+    pub command_prefix: String,
     pub bounty_submission_format: BountySubmissionFormat,
     pub command_channels: Option<Vec<Id<ChannelMarker>>>,
     pub current_bounty_number: i64,
@@ -233,7 +253,7 @@ impl TryFrom<GuildConfigSchema> for GuildConfig {
             rejected_bounties_channel: value
                 .rejected_bounties_channel
                 .map(|id| id.cast_unsigned().into()),
-            command_prefixes: value.command_prefixes,
+            command_prefix: value.command_prefix,
             bounty_submission_format: serde_json::from_value(value.bounty_submission_format)?,
             command_channels: value.command_channels.map(|command_channels| {
                 command_channels
@@ -255,7 +275,7 @@ struct GuildConfigSchema {
     pub claimed_bounties_channel: Option<i64>,
     pub completed_bounties_channel: Option<i64>,
     pub rejected_bounties_channel: Option<i64>,
-    pub command_prefixes: Vec<String>,
+    pub command_prefix: String,
     pub bounty_submission_format: serde_json::Value,
     pub command_channels: Option<Vec<i64>>,
     pub current_bounty_number: i64,

@@ -97,11 +97,7 @@ impl EventHandler for Handler {
         let full_command = if let Some(full_command) = content.strip_prefix(&mention_prefix) {
             full_command
         } else {
-            let Some(full_command) = guild_config
-                .command_prefixes
-                .iter()
-                .find_map(|prefix| content.strip_prefix(prefix))
-            else {
+            let Some(full_command) = content.strip_prefix(&guild_config.command_prefix) else {
                 if let Some(bounty_submission_channel) = guild_config.bounty_submission_channel
                     && message.channel_id == bounty_submission_channel
                     && let Err(e) = handle_submission_create(

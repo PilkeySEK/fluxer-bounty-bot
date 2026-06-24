@@ -87,4 +87,4 @@ No permissions required.
 - [ ] Configurable command prefix
 - [ ] Role-based permission management
 - [ ] Edit existing bounties
-- [ ] Fix duplicate due date
+- [X] Fix duplicate due date

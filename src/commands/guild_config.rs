@@ -88,6 +88,7 @@ pub async fn guild_config(ctx: CommandContext<'_>, args: &str) -> anyhow::Result
             )
             .await
         }
+        "command-prefix" | "prefix" => set_command_prefix(ctx, args).await,
         "" => reply_with_guild_config(ctx).await,
         _ => {
             ctx.message
@@ -102,6 +103,35 @@ pub async fn guild_config(ctx: CommandContext<'_>, args: &str) -> anyhow::Result
             Ok(())
         }
     }
+}
+
+async fn set_command_prefix(ctx: CommandContext<'_>, args: &str) -> anyhow::Result<()> {
+    let prefix = args.trim();
+    if prefix.is_empty() {
+        ctx.message
+            .reply(
+                ctx.ctx,
+                create_embed!(
+                    description: "Provide a command prefix.",
+                    color: FAILURE,
+                ),
+            )
+            .await?;
+        return Ok(());
+    }
+    ctx.db
+        .set_guild_command_prefix_upsert(ctx.guild_id, prefix)
+        .await?;
+    ctx.message
+        .reply(
+            ctx.ctx,
+            create_embed!(
+                description: format!("The command prefix is now `{prefix}`."),
+                color: SUCCESS,
+            ),
+        )
+        .await?;
+    Ok(())
 }
 
 async fn set_channel_common<'a, F, Fut>(
@@ -168,7 +198,8 @@ where
 
 async fn reply_with_guild_config(ctx: CommandContext<'_>) -> anyhow::Result<()> {
     let config_string = format!(
-        "**Total bounties ever created:** `{}`\n__Channels__\n**Bounty Submissions:** {}\n**Approval Queue:** {}\n**Claimed Bounties:** {}\n**Completed Bounties:** {}\n**Denied Bounties:** {}",
+        "**Command prefix:** `{}`\n**Total bounties ever created:** `{}`\n__Channels__\n**Bounty Submissions:** {}\n**Approval Queue:** {}\n**Claimed Bounties:** {}\n**Completed Bounties:** {}\n**Denied Bounties:** {}",
+        ctx.guild_config.command_prefix,
         ctx.guild_config.current_bounty_number,
         ctx.guild_config
             .bounty_submission_channel
