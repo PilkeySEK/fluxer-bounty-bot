@@ -6,6 +6,8 @@ use fluxer_neptunium::{
     http::endpoints::channel::AllowedMentions,
 };
 use sqids::{Sqids, SqidsBuilder};
+use tracing::level_filters::LevelFilter;
+use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::{db::DbManager, event_handler::Handler};
 
@@ -42,7 +44,14 @@ static SQIDS_NO_BLOCKLIST: LazyLock<Sqids> = LazyLock::new(|| {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt().init();
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::fmt::layer())
+        .with(
+            EnvFilter::builder()
+                .with_default_directive(LevelFilter::DEBUG.into())
+                .from_env_lossy(),
+        )
+        .init();
 
     if let Err(e) = dotenvy::dotenv() {
         tracing::warn!(".env file not found: {e}");
