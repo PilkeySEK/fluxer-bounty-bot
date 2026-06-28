@@ -123,6 +123,17 @@
             "name": "current_bounty_number"
           }
         }
+      },
+      {
+        "ordinal": 11,
+        "name": "delete_commands",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "guilds",
+            "name": "delete_commands"
+          }
+        }
       }
     ],
     "parameters": {
@@ -142,6 +153,7 @@
       false,
       false,
       true,
+      false,
       false
     ]
   },

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO guilds (guild_id, bounty_submission_format, delete_commands)\n            VALUES ($1, $2, $3)\n            ON CONFLICT (guild_id) DO UPDATE\n            SET delete_commands = $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Jsonb",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c83473ec13d0f9c3e1ca4182c523074f485bdd57bb89dbcee012b77c5485a6ab"
+}
