@@ -122,12 +122,21 @@ impl CommandContext<'_> {
 
     /// Reply to the original message, deleting the message and reply after 5 seconds if the guild config has this configured.
     pub async fn reply(&self, body: impl Into<CreateMessageBody> + Send) -> anyhow::Result<()> {
+        self.reply_with_deletion_duration(body, Duration::from_secs(5))
+            .await
+    }
+
+    pub async fn reply_with_deletion_duration(
+        &self,
+        body: impl Into<CreateMessageBody> + Send,
+        duration: Duration,
+    ) -> anyhow::Result<()> {
         let reply = self.message.reply(self.ctx, body).await?;
         if self.guild_config.delete_commands {
             let message = self.message.load();
             let ctx = self.ctx.clone();
             tokio::spawn(async move {
-                tokio::time::sleep(Duration::from_secs(5)).await;
+                tokio::time::sleep(duration).await;
                 if let Err(e) = message.delete(&ctx).await {
                     tracing::error!("Error deleting message {}: {e}", message.id);
                 }
@@ -340,5 +349,6 @@ pub fn new_dispatcher_with_commands() -> CommandDispatcher {
             BotPermissions::MANAGE_GUILD_CONFIG,
             Arc::new(permission_management::list_permissions),
         ),
+        (&["help"], BotPermissions::empty(), Arc::new(misc::help)),
     ])
 }

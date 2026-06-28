@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use chrono::{DateTime, Utc};
 use fluxer_neptunium::{create_embed, exts::MessageExt};
 
@@ -27,5 +29,13 @@ pub async fn bounty_workflow(ctx: CommandContext<'_>, _args: &str) -> anyhow::Re
     ctx.message
         .reply(ctx.ctx, ctx.bounty_workflow_image_url)
         .await?;
+    Ok(())
+}
+
+pub async fn help(ctx: CommandContext<'_>, _args: &str) -> anyhow::Result<()> {
+    ctx.reply_with_deletion_duration(create_embed!(
+        description: "The documentation for all commands can be found in the GitHub repository, DOCS.md:\nhttps://github.com/PilkeySEK/fluxer-bounty-bot/blob/master/DOCS.md",
+        color: DEFAULT,
+    ), Duration::from_secs(10)).await?;
     Ok(())
 }
