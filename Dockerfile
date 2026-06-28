@@ -28,6 +28,9 @@ RUN apt-get update && apt-get install -y \
 
 COPY --from=build /bin/bounty-bot ./bounty-bot
 
-COPY .env ./.env
+# If .env doesn't exist that's fine, probably
+COPY .env* ./.env
+# Replace with .env.example if not exists
+RUN cp -u -p ./.env.example ./.env
 
 CMD ["./bounty-bot"]
