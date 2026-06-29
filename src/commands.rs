@@ -249,6 +249,16 @@ pub fn new_dispatcher_with_commands() -> CommandDispatcher {
         ),
         (
             &[
+                "approve-bypass",
+                "approval-bypass",
+                "bypass-approve",
+                "bounty-approve-bypass",
+            ],
+            BotPermissions::MANAGE_BOUNTIES,
+            Arc::new(bounty_management::approve_bounty_bypass),
+        ),
+        (
+            &[
                 "reject",
                 "deny",
                 "reject-bounty",
@@ -258,6 +268,18 @@ pub fn new_dispatcher_with_commands() -> CommandDispatcher {
             ],
             BotPermissions::MANAGE_BOUNTIES,
             Arc::new(bounty_management::reject_bounty),
+        ),
+        (
+            &[
+                "reject-bypass",
+                "deny-bypass",
+                "denial-bypass",
+                "bypass-reject",
+                "bypass-deny",
+                "bounty-deny-bypass",
+            ],
+            BotPermissions::MANAGE_BOUNTIES,
+            Arc::new(bounty_management::reject_bounty_bypass),
         ),
         (
             &[

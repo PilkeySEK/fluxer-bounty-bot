@@ -97,6 +97,7 @@ pub async fn handle_submission_create(
                     None,
                     deadline_timestamp,
                     Vec::new(),
+                    Vec::new(),
                 ),
             )
             .await;

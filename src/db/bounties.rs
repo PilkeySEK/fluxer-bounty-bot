@@ -54,6 +54,57 @@ impl DbManager {
         Ok(Some(raw.try_into().context("Failed to convert")?))
     }
 
+    pub async fn upsert_bounty_review(
+        &self,
+        guild_id: Id<GuildMarker>,
+        bounty_number: BountyNum,
+        reviewer_id: Id<UserMarker>,
+        decision: BountyReviewDecision,
+        comment: Option<&str>,
+        bypass: bool,
+    ) -> anyhow::Result<Option<i64>> {
+        let bounty_id = sqlx::query_scalar!(
+            "INSERT INTO bounty_reviews (bounty_id, reviewer_id, decision, comment, bypass)
+            SELECT bounty_id, $3, $4, $5, $6
+            FROM bounties
+            WHERE guild_id = $1 AND bounty_number = $2
+            ON CONFLICT (bounty_id, reviewer_id) DO UPDATE
+            SET decision = EXCLUDED.decision,
+                comment = EXCLUDED.comment,
+                bypass = EXCLUDED.bypass OR bounty_reviews.bypass,
+                updated_at = NOW()
+            RETURNING bounty_id",
+            guild_id.into_inner().cast_signed(),
+            bounty_number.0,
+            reviewer_id.into_inner().cast_signed(),
+            decision.to_string(),
+            comment,
+            bypass,
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(bounty_id)
+    }
+
+    pub async fn list_bounty_reviews(
+        &self,
+        bounty_id: i64,
+    ) -> anyhow::Result<Vec<BountyReview>> {
+        let raw = sqlx::query_as!(
+            BountyReviewSchema,
+            "SELECT bounty_id, reviewer_id, decision, comment, bypass, created_at, updated_at
+            FROM bounty_reviews
+            WHERE bounty_id = $1
+            ORDER BY bypass DESC, updated_at ASC",
+            bounty_id,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        raw.into_iter()
+            .map(TryInto::try_into)
+            .collect::<Result<_, _>>()
+    }
+
     /// Won't take the previous state of the bounty into account.
     pub async fn set_bounty_state_and_related_message(
         &self,
@@ -160,6 +211,28 @@ pub enum BountyState {
     Rejected,
 }
 
+#[derive(strum::Display, strum::EnumString, PartialEq, Eq, Copy, Clone)]
+pub enum BountyReviewDecision {
+    Approval,
+    Denial,
+}
+
+impl BountyReviewDecision {
+    pub fn noun(self) -> &'static str {
+        match self {
+            Self::Approval => "approval",
+            Self::Denial => "denial",
+        }
+    }
+
+    pub fn noun_plural(self) -> &'static str {
+        match self {
+            Self::Approval => "approvals",
+            Self::Denial => "denials",
+        }
+    }
+}
+
 pub type BountySubmissionContent = HashMap<BountyInfoKey, String>;
 
 #[derive(Copy, Clone)]
@@ -195,6 +268,19 @@ pub struct BountyCreateData {
     pub deadline: Option<DateTime<Utc>>,
 }
 
+pub struct BountyReview {
+    #[expect(unused)]
+    pub bounty_id: i64,
+    pub reviewer_id: Id<UserMarker>,
+    pub decision: BountyReviewDecision,
+    pub comment: Option<String>,
+    pub bypass: bool,
+    #[expect(unused)]
+    pub created_at: DateTime<Utc>,
+    #[expect(unused)]
+    pub updated_at: DateTime<Utc>,
+}
+
 impl TryFrom<BountySchema> for Bounty {
     type Error = anyhow::Error;
     fn try_from(value: BountySchema) -> Result<Self, Self::Error> {
@@ -222,6 +308,21 @@ impl TryFrom<BountySchema> for Bounty {
     }
 }
 
+impl TryFrom<BountyReviewSchema> for BountyReview {
+    type Error = anyhow::Error;
+    fn try_from(value: BountyReviewSchema) -> Result<Self, Self::Error> {
+        Ok(Self {
+            bounty_id: value.bounty_id,
+            reviewer_id: value.reviewer_id.cast_unsigned().into(),
+            decision: BountyReviewDecision::from_str(&value.decision)?,
+            comment: value.comment,
+            bypass: value.bypass,
+            created_at: value.created_at,
+            updated_at: value.updated_at,
+        })
+    }
+}
+
 struct BountySchema {
     bounty_id: i64,
     bounty_number: i64,
@@ -234,6 +335,16 @@ struct BountySchema {
     related_message_id: Option<i64>,
     related_channel_id: Option<i64>,
     deadline: Option<DateTime<Utc>>,
+}
+
+struct BountyReviewSchema {
+    bounty_id: i64,
+    reviewer_id: i64,
+    decision: String,
+    comment: Option<String>,
+    bypass: bool,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
