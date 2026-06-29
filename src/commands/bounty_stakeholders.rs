@@ -96,6 +96,7 @@ async fn add_bounty_stakeholder(ctx: CommandContext<'_>, args: &str) -> anyhow::
                     bounty.assigned_to,
                     bounty.deadline,
                     ctx.db.list_bounty_stakeholders(bounty.bounty_id).await?,
+                    ctx.db.list_bounty_reviews(bounty.bounty_id).await?,
                 )
                 .into(),
             })
@@ -163,6 +164,7 @@ async fn remove_bounty_stakeholder(ctx: CommandContext<'_>, args: &str) -> anyho
                     bounty.assigned_to,
                     bounty.deadline,
                     ctx.db.list_bounty_stakeholders(bounty.bounty_id).await?,
+                    ctx.db.list_bounty_reviews(bounty.bounty_id).await?,
                 )
                 .into(),
             })

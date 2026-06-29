@@ -6,8 +6,12 @@ use fluxer_neptunium::{
     exts::{ChannelExt, MessageExt, UserExt},
     http::endpoints::channel::{DeleteMessage, EditMessage},
     model::{
-        id::{Id, marker::ChannelMarker},
+        id::{
+            Id,
+            marker::{ChannelMarker, UserMarker},
+        },
         time::timestamp::{Timestamp, representations::Iso8601},
+        user::PartialUser,
     },
 };
 
@@ -15,7 +19,9 @@ use crate::{
     colors::{DEFAULT, FAILURE, SUCCESS},
     commands::CommandContext,
     db::{
-        bounties::{BountyRelatedMessage, BountyState},
+        bounties::{
+            Bounty, BountyRelatedMessage, BountyReview, BountyReviewDecision, BountyState,
+        },
         guilds::BountyInfoKey,
     },
     util::{
@@ -28,19 +34,163 @@ use crate::{
 
 // TODO: When replying to a message and not providing the bounty number, try to get the bounty from the replied-to message.
 
+const APPROVAL_THRESHOLD: usize = 3;
+const DENIAL_THRESHOLD: usize = 2;
+
 pub async fn complete_bounty(ctx: CommandContext<'_>, args: &str) -> anyhow::Result<()> {
     let new_channel = ctx.guild_config.completed_bounties_channel;
     set_bounty_state_common(ctx, args, "complete", BountyState::Completed, new_channel).await
 }
 
 pub async fn approve_bounty(ctx: CommandContext<'_>, args: &str) -> anyhow::Result<()> {
-    let new_channel = ctx.guild_config.approved_bounties_channel;
-    set_bounty_state_common(ctx, args, "approve", BountyState::Approved, new_channel).await
+    review_bounty_common(
+        ctx,
+        args,
+        "approve",
+        BountyReviewDecision::Approval,
+        BountyState::Approved,
+        APPROVAL_THRESHOLD,
+        false,
+    )
+    .await
+}
+
+pub async fn approve_bounty_bypass(ctx: CommandContext<'_>, args: &str) -> anyhow::Result<()> {
+    review_bounty_common(
+        ctx,
+        args,
+        "approve-bypass",
+        BountyReviewDecision::Approval,
+        BountyState::Approved,
+        APPROVAL_THRESHOLD,
+        true,
+    )
+    .await
 }
 
 pub async fn reject_bounty(ctx: CommandContext<'_>, args: &str) -> anyhow::Result<()> {
-    let new_channel = ctx.guild_config.rejected_bounties_channel;
-    set_bounty_state_common(ctx, args, "reject", BountyState::Rejected, new_channel).await
+    review_bounty_common(
+        ctx,
+        args,
+        "deny",
+        BountyReviewDecision::Denial,
+        BountyState::Rejected,
+        DENIAL_THRESHOLD,
+        false,
+    )
+    .await
+}
+
+pub async fn reject_bounty_bypass(ctx: CommandContext<'_>, args: &str) -> anyhow::Result<()> {
+    review_bounty_common(
+        ctx,
+        args,
+        "deny-bypass",
+        BountyReviewDecision::Denial,
+        BountyState::Rejected,
+        DENIAL_THRESHOLD,
+        true,
+    )
+    .await
+}
+
+async fn review_bounty_common(
+    ctx: CommandContext<'_>,
+    args: &str,
+    operation: &str,
+    decision: BountyReviewDecision,
+    new_state: BountyState,
+    threshold: usize,
+    bypass: bool,
+) -> anyhow::Result<()> {
+    let (bounty_num, rest) = get_bounty_num_from_args!(ctx, args, operation);
+    let comment = rest.trim();
+    let comment = if comment.is_empty() {
+        None
+    } else {
+        Some(comment)
+    };
+
+    let Some(bounty) = ctx.db.get_bounty(ctx.guild_id, bounty_num).await? else {
+        ctx.reply(create_embed!(
+            description: "A bounty with that ID does not exist.",
+            color: FAILURE,
+        ))
+        .await?;
+        return Ok(());
+    };
+
+    if bounty.state != BountyState::Pending {
+        ctx.reply(create_embed!(
+            description: format!(
+                "Only pending bounties can be reviewed. The bounty is currently {}.",
+                bounty.state.to_string().to_lowercase()
+            ),
+            color: FAILURE,
+        ))
+        .await?;
+        return Ok(());
+    }
+
+    ctx.db
+        .upsert_bounty_review(
+            ctx.guild_id,
+            bounty_num,
+            ctx.guild_member.id,
+            decision,
+            comment,
+            bypass,
+        )
+        .await?;
+
+    let reviews = ctx.db.list_bounty_reviews(bounty.bounty_id).await?;
+    let decision_count = reviews
+        .iter()
+        .filter(|review| review.decision == decision)
+        .count();
+    let new_channel = match new_state {
+        BountyState::Approved => ctx.guild_config.approved_bounties_channel,
+        BountyState::Rejected => ctx.guild_config.rejected_bounties_channel,
+        BountyState::Completed | BountyState::Pending => None,
+    };
+
+    if bypass || decision_count >= threshold {
+        set_bounty_state(&ctx, &bounty, new_state, new_channel, reviews).await?;
+        let description = if bypass {
+            format!(
+                "Bypassed the {} threshold for `{bounty_num}`, it is now {}.",
+                decision.noun(),
+                new_state.to_string().to_lowercase()
+            )
+        } else {
+            format!(
+                "Recorded {}/{} {}; `{bounty_num}` is now {}.",
+                decision_count,
+                threshold,
+                decision.noun_plural(),
+                new_state.to_string().to_lowercase()
+            )
+        };
+        ctx.reply(create_embed!(
+            description: description,
+            color: SUCCESS,
+        ))
+        .await?;
+    } else {
+        update_bounty_related_message(&ctx, &bounty, reviews).await?;
+        ctx.reply(create_embed!(
+            description: format!(
+                "Recorded {}/{} {} for `{bounty_num}`.",
+                decision_count,
+                threshold,
+                decision.noun_plural()
+            ),
+            color: SUCCESS,
+        ))
+        .await?;
+    }
+
+    Ok(())
 }
 
 async fn set_bounty_state_common(
@@ -70,14 +220,28 @@ async fn set_bounty_state_common(
         return Ok(());
     }
 
+    let reviews = ctx.db.list_bounty_reviews(bounty.bounty_id).await?;
+    set_bounty_state(&ctx, &bounty, new_state, new_channel, reviews).await?;
+    ctx.reply(
+            create_embed!(
+                description: format!("Updated `{bounty_num}`, it is now {}", new_state.to_string().to_lowercase()),
+                color: SUCCESS,
+            ),
+        )
+        .await?;
+
+    Ok(())
+}
+
+async fn set_bounty_state(
+    ctx: &CommandContext<'_>,
+    bounty: &Bounty,
+    new_state: BountyState,
+    new_channel: Option<Id<ChannelMarker>>,
+    reviews: Vec<BountyReview>,
+) -> anyhow::Result<()> {
     let new_related_message = if let Some(new_channel) = new_channel {
-        let created_by = match bounty.created_by.get_user(ctx.ctx).await {
-            Ok(created_by) => either::Either::Left(created_by.clone_inner()),
-            Err(e) => {
-                tracing::warn!("Error fetching user {}: {e}", bounty.created_by);
-                either::Either::Right(bounty.created_by)
-            }
-        };
+        let created_by = get_bounty_creator(ctx, bounty).await;
         Some(
             new_channel
                 .send_message(
@@ -92,6 +256,7 @@ async fn set_bounty_state_common(
                         bounty.assigned_to,
                         bounty.deadline,
                         ctx.db.list_bounty_stakeholders(bounty.bounty_id).await?,
+                        reviews,
                     ),
                 )
                 .await?,
@@ -115,7 +280,7 @@ async fn set_bounty_state_common(
     ctx.db
         .set_bounty_state_and_related_message(
             ctx.guild_id,
-            bounty_num,
+            bounty.bounty_number,
             new_state,
             new_related_message.map(|msg| BountyRelatedMessage {
                 message_id: msg.id,
@@ -124,15 +289,52 @@ async fn set_bounty_state_common(
         )
         .await?;
 
-    ctx.reply(
-            create_embed!(
-                description: format!("Updated `{bounty_num}`, it is now {}", new_state.to_string().to_lowercase()),
-                color: SUCCESS,
-            ),
-        )
-        .await?;
-
     Ok(())
+}
+
+async fn update_bounty_related_message(
+    ctx: &CommandContext<'_>,
+    bounty: &Bounty,
+    reviews: Vec<BountyReview>,
+) -> anyhow::Result<()> {
+    let Some(related_message) = bounty.related_message else {
+        return Ok(());
+    };
+    let created_by = get_bounty_creator(ctx, bounty).await;
+    let embed = bounty_content_to_message(
+        &bounty.content,
+        created_by,
+        &ctx.guild_config.bounty_submission_format,
+        bounty.bounty_number,
+        bounty.created_at,
+        bounty.state,
+        bounty.assigned_to,
+        bounty.deadline,
+        ctx.db.list_bounty_stakeholders(bounty.bounty_id).await?,
+        reviews,
+    );
+    ctx.ctx
+        .get_http_client()
+        .execute(EditMessage {
+            message_id: related_message.message_id,
+            channel_id: related_message.channel_id,
+            body: embed.into(),
+        })
+        .await?;
+    Ok(())
+}
+
+async fn get_bounty_creator(
+    ctx: &CommandContext<'_>,
+    bounty: &Bounty,
+) -> either::Either<PartialUser, Id<UserMarker>> {
+    match bounty.created_by.get_user(ctx.ctx).await {
+        Ok(created_by) => either::Either::Left(created_by.clone_inner()),
+        Err(e) => {
+            tracing::warn!("Error fetching user {}: {e}", bounty.created_by);
+            either::Either::Right(bounty.created_by)
+        }
+    }
 }
 
 pub async fn delete_bounty(ctx: CommandContext<'_>, args: &str) -> anyhow::Result<()> {
@@ -227,6 +429,7 @@ pub async fn assign_to_bounty(ctx: CommandContext<'_>, args: &str) -> anyhow::Re
             Some(user_id),
             bounty.deadline,
             ctx.db.list_bounty_stakeholders(bounty.bounty_id).await?,
+            ctx.db.list_bounty_reviews(bounty.bounty_id).await?,
         );
         ctx.ctx
             .get_http_client()
@@ -297,6 +500,7 @@ pub async fn self_assign_to_bounty(ctx: CommandContext<'_>, args: &str) -> anyho
             Some(user_id),
             bounty.deadline,
             ctx.db.list_bounty_stakeholders(bounty.bounty_id).await?,
+            ctx.db.list_bounty_reviews(bounty.bounty_id).await?,
         );
         ctx.ctx
             .get_http_client()
@@ -359,6 +563,7 @@ pub async fn unassign_from_bounty(ctx: CommandContext<'_>, args: &str) -> anyhow
             None,
             bounty.deadline,
             ctx.db.list_bounty_stakeholders(bounty.bounty_id).await?,
+            ctx.db.list_bounty_reviews(bounty.bounty_id).await?,
         );
         ctx.ctx
             .get_http_client()
@@ -420,6 +625,7 @@ pub async fn self_unassign_from_bounty(ctx: CommandContext<'_>, args: &str) -> a
             None,
             bounty.deadline,
             ctx.db.list_bounty_stakeholders(bounty.bounty_id).await?,
+            ctx.db.list_bounty_reviews(bounty.bounty_id).await?,
         );
         ctx.ctx
             .get_http_client()
@@ -527,6 +733,7 @@ pub async fn edit_bounty(ctx: CommandContext<'_>, args: &str) -> anyhow::Result<
             bounty.assigned_to,
             bounty.deadline,
             ctx.db.list_bounty_stakeholders(bounty.bounty_id).await?,
+            ctx.db.list_bounty_reviews(bounty.bounty_id).await?,
         );
         ctx.ctx
             .get_http_client()

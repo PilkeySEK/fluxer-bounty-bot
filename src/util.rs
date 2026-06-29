@@ -21,7 +21,9 @@ use crate::{
     AVATAR_URL_BASE, STATIC_BASE,
     colors::SUBMISSION_PENDING,
     db::{
-        bounties::{BountyNum, BountyState, BountySubmissionContent},
+        bounties::{
+            BountyNum, BountyReview, BountyReviewDecision, BountyState, BountySubmissionContent,
+        },
         bounty_stakeholders::BountyStakeholder,
         guilds::{BountyInfoKey, BountySubmissionFormat},
     },
@@ -149,6 +151,7 @@ pub fn bounty_content_to_message(
     assigned_to: Option<Id<UserMarker>>,
     deadline: Option<DateTime<Utc>>,
     stakeholders: Vec<BountyStakeholder>,
+    reviews: Vec<BountyReview>,
 ) -> MessageEmbed {
     let mut content = content.iter().collect::<Vec<_>>();
     content.sort();
@@ -181,6 +184,28 @@ pub fn bounty_content_to_message(
                 .time_string(TimestampDisplayType::ShortDateAndTime)
         );
         description.push_str(&deadline_string);
+    }
+    if !reviews.is_empty() {
+        let approvals = reviews
+            .iter()
+            .filter(|review| review.decision == BountyReviewDecision::Approval)
+            .collect::<Vec<_>>();
+        let denials = reviews
+            .iter()
+            .filter(|review| review.decision == BountyReviewDecision::Denial)
+            .collect::<Vec<_>>();
+        if !approvals.is_empty() {
+            description.push_str("**Approvals**\n");
+            for review in approvals {
+                description.push_str(&format_bounty_review_line(review));
+            }
+        }
+        if !denials.is_empty() {
+            description.push_str("**Denials**\n");
+            for review in denials {
+                description.push_str(&format_bounty_review_line(review));
+            }
+        }
     }
     if !stakeholders.is_empty() {
         description.push_str("**Bounty Amount (USD)**\n");
@@ -254,6 +279,17 @@ pub fn bounty_content_to_message(
     });
     embed.timestamp = Some(created_at.into());
     embed
+}
+
+fn format_bounty_review_line(review: &BountyReview) -> String {
+    let bypass = if review.bypass { " (bypass)" } else { "" };
+    if let Some(comment) = review.comment.as_deref().map(str::trim)
+        && !comment.is_empty()
+    {
+        format!("- <@{}>{bypass}: {comment}\n", review.reviewer_id)
+    } else {
+        format!("- <@{}>{bypass}\n", review.reviewer_id)
+    }
 }
 
 #[cfg(test)]
