@@ -155,6 +155,7 @@ impl DbManager {
         )
         .fetch_one(&self.pool)
         .await?;
+        self.cached_guild_config.invalidate(&guild_id);
         Ok(BountyNum(num))
     }
 
