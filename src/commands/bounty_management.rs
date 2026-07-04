@@ -209,8 +209,8 @@ pub async fn assign_to_bounty(ctx: CommandContext<'_>, args: &str) -> anyhow::Re
     ctx.db
         .assign_user_to_bounty(ctx.guild_id, bounty_num, Some(user_id))
         .await?;
-    if let Some(related_message) = bounty.related_message {
-        if let Err(e) = ctx
+    if let Some(related_message) = bounty.related_message
+        && let Err(e) = ctx
             .ctx
             .get_http_client()
             .execute(DeleteMessage {
@@ -218,13 +218,12 @@ pub async fn assign_to_bounty(ctx: CommandContext<'_>, args: &str) -> anyhow::Re
                 channel_id: related_message.channel_id,
             })
             .await
-        {
-            tracing::error!(
-                "Error deleting message {} in channel {}: {e}",
-                related_message.message_id,
-                related_message.channel_id
-            );
-        }
+    {
+        tracing::error!(
+            "Error deleting message {} in channel {}: {e}",
+            related_message.message_id,
+            related_message.channel_id
+        );
     }
     if let Some(assigned_bounties_channel) = ctx.guild_config.claimed_bounties_channel {
         let created_by = match bounty.created_by.get_user(ctx.ctx).await {
@@ -291,8 +290,8 @@ pub async fn self_assign_to_bounty(ctx: CommandContext<'_>, args: &str) -> anyho
     ctx.db
         .assign_user_to_bounty(ctx.guild_id, bounty_num, Some(user_id))
         .await?;
-    if let Some(related_message) = bounty.related_message {
-        if let Err(e) = ctx
+    if let Some(related_message) = bounty.related_message
+        && let Err(e) = ctx
             .ctx
             .get_http_client()
             .execute(DeleteMessage {
@@ -300,13 +299,12 @@ pub async fn self_assign_to_bounty(ctx: CommandContext<'_>, args: &str) -> anyho
                 channel_id: related_message.channel_id,
             })
             .await
-        {
-            tracing::error!(
-                "Error deleting message {} in channel {}: {e}",
-                related_message.message_id,
-                related_message.channel_id
-            );
-        }
+    {
+        tracing::error!(
+            "Error deleting message {} in channel {}: {e}",
+            related_message.message_id,
+            related_message.channel_id
+        );
     }
     if let Some(assigned_bounties_channel) = ctx.guild_config.claimed_bounties_channel {
         let created_by = match bounty.created_by.get_user(ctx.ctx).await {
@@ -365,8 +363,8 @@ pub async fn unassign_from_bounty(ctx: CommandContext<'_>, args: &str) -> anyhow
     ctx.db
         .assign_user_to_bounty(ctx.guild_id, bounty_num, None)
         .await?;
-    if let Some(related_message) = bounty.related_message {
-        if let Err(e) = ctx
+    if let Some(related_message) = bounty.related_message
+        && let Err(e) = ctx
             .ctx
             .get_http_client()
             .execute(DeleteMessage {
@@ -374,13 +372,12 @@ pub async fn unassign_from_bounty(ctx: CommandContext<'_>, args: &str) -> anyhow
                 channel_id: related_message.channel_id,
             })
             .await
-        {
-            tracing::error!(
-                "Error deleting message {} in channel {}: {e}",
-                related_message.message_id,
-                related_message.channel_id
-            );
-        }
+    {
+        tracing::error!(
+            "Error deleting message {} in channel {}: {e}",
+            related_message.message_id,
+            related_message.channel_id
+        );
     }
     if let Some(approved_bounties_channel) = ctx.guild_config.approved_bounties_channel {
         let created_by = match bounty.created_by.get_user(ctx.ctx).await {
@@ -438,8 +435,8 @@ pub async fn self_unassign_from_bounty(ctx: CommandContext<'_>, args: &str) -> a
     ctx.db
         .assign_user_to_bounty(ctx.guild_id, bounty_num, None)
         .await?;
-    if let Some(related_message) = bounty.related_message {
-        if let Err(e) = ctx
+    if let Some(related_message) = bounty.related_message
+        && let Err(e) = ctx
             .ctx
             .get_http_client()
             .execute(DeleteMessage {
@@ -447,13 +444,12 @@ pub async fn self_unassign_from_bounty(ctx: CommandContext<'_>, args: &str) -> a
                 channel_id: related_message.channel_id,
             })
             .await
-        {
-            tracing::error!(
-                "Error deleting message {} in channel {}: {e}",
-                related_message.message_id,
-                related_message.channel_id
-            );
-        }
+    {
+        tracing::error!(
+            "Error deleting message {} in channel {}: {e}",
+            related_message.message_id,
+            related_message.channel_id
+        );
     }
     if let Some(approved_bounties_channel) = ctx.guild_config.approved_bounties_channel {
         let created_by = match bounty.created_by.get_user(ctx.ctx).await {
