@@ -210,6 +210,23 @@ pub async fn assign_to_bounty(ctx: CommandContext<'_>, args: &str) -> anyhow::Re
         .assign_user_to_bounty(ctx.guild_id, bounty_num, Some(user_id))
         .await?;
     if let Some(related_message) = bounty.related_message {
+        if let Err(e) = ctx
+            .ctx
+            .get_http_client()
+            .execute(DeleteMessage {
+                message_id: related_message.message_id,
+                channel_id: related_message.channel_id,
+            })
+            .await
+        {
+            tracing::error!(
+                "Error deleting message {} in channel {}: {e}",
+                related_message.message_id,
+                related_message.channel_id
+            );
+        }
+    }
+    if let Some(assigned_bounties_channel) = ctx.guild_config.claimed_bounties_channel {
         let created_by = match bounty.created_by.get_user(ctx.ctx).await {
             Ok(created_by) => either::Either::Left(created_by.clone_inner()),
             Err(e) => {
@@ -228,13 +245,8 @@ pub async fn assign_to_bounty(ctx: CommandContext<'_>, args: &str) -> anyhow::Re
             bounty.deadline,
             ctx.db.list_bounty_stakeholders(bounty.bounty_id).await?,
         );
-        ctx.ctx
-            .get_http_client()
-            .execute(EditMessage {
-                message_id: related_message.message_id,
-                channel_id: related_message.channel_id,
-                body: embed.into(),
-            })
+        assigned_bounties_channel
+            .send_message(ctx.ctx, embed)
             .await?;
     }
 
@@ -280,6 +292,23 @@ pub async fn self_assign_to_bounty(ctx: CommandContext<'_>, args: &str) -> anyho
         .assign_user_to_bounty(ctx.guild_id, bounty_num, Some(user_id))
         .await?;
     if let Some(related_message) = bounty.related_message {
+        if let Err(e) = ctx
+            .ctx
+            .get_http_client()
+            .execute(DeleteMessage {
+                message_id: related_message.message_id,
+                channel_id: related_message.channel_id,
+            })
+            .await
+        {
+            tracing::error!(
+                "Error deleting message {} in channel {}: {e}",
+                related_message.message_id,
+                related_message.channel_id
+            );
+        }
+    }
+    if let Some(assigned_bounties_channel) = ctx.guild_config.claimed_bounties_channel {
         let created_by = match bounty.created_by.get_user(ctx.ctx).await {
             Ok(created_by) => either::Either::Left(created_by.clone_inner()),
             Err(e) => {
@@ -298,13 +327,8 @@ pub async fn self_assign_to_bounty(ctx: CommandContext<'_>, args: &str) -> anyho
             bounty.deadline,
             ctx.db.list_bounty_stakeholders(bounty.bounty_id).await?,
         );
-        ctx.ctx
-            .get_http_client()
-            .execute(EditMessage {
-                message_id: related_message.message_id,
-                channel_id: related_message.channel_id,
-                body: embed.into(),
-            })
+        assigned_bounties_channel
+            .send_message(ctx.ctx, embed)
             .await?;
     }
 
@@ -342,6 +366,23 @@ pub async fn unassign_from_bounty(ctx: CommandContext<'_>, args: &str) -> anyhow
         .assign_user_to_bounty(ctx.guild_id, bounty_num, None)
         .await?;
     if let Some(related_message) = bounty.related_message {
+        if let Err(e) = ctx
+            .ctx
+            .get_http_client()
+            .execute(DeleteMessage {
+                message_id: related_message.message_id,
+                channel_id: related_message.channel_id,
+            })
+            .await
+        {
+            tracing::error!(
+                "Error deleting message {} in channel {}: {e}",
+                related_message.message_id,
+                related_message.channel_id
+            );
+        }
+    }
+    if let Some(approved_bounties_channel) = ctx.guild_config.approved_bounties_channel {
         let created_by = match bounty.created_by.get_user(ctx.ctx).await {
             Ok(created_by) => either::Either::Left(created_by.clone_inner()),
             Err(e) => {
@@ -360,13 +401,8 @@ pub async fn unassign_from_bounty(ctx: CommandContext<'_>, args: &str) -> anyhow
             bounty.deadline,
             ctx.db.list_bounty_stakeholders(bounty.bounty_id).await?,
         );
-        ctx.ctx
-            .get_http_client()
-            .execute(EditMessage {
-                message_id: related_message.message_id,
-                channel_id: related_message.channel_id,
-                body: embed.into(),
-            })
+        approved_bounties_channel
+            .send_message(ctx.ctx, embed)
             .await?;
     }
 
@@ -403,6 +439,23 @@ pub async fn self_unassign_from_bounty(ctx: CommandContext<'_>, args: &str) -> a
         .assign_user_to_bounty(ctx.guild_id, bounty_num, None)
         .await?;
     if let Some(related_message) = bounty.related_message {
+        if let Err(e) = ctx
+            .ctx
+            .get_http_client()
+            .execute(DeleteMessage {
+                message_id: related_message.message_id,
+                channel_id: related_message.channel_id,
+            })
+            .await
+        {
+            tracing::error!(
+                "Error deleting message {} in channel {}: {e}",
+                related_message.message_id,
+                related_message.channel_id
+            );
+        }
+    }
+    if let Some(approved_bounties_channel) = ctx.guild_config.approved_bounties_channel {
         let created_by = match bounty.created_by.get_user(ctx.ctx).await {
             Ok(created_by) => either::Either::Left(created_by.clone_inner()),
             Err(e) => {
@@ -421,15 +474,11 @@ pub async fn self_unassign_from_bounty(ctx: CommandContext<'_>, args: &str) -> a
             bounty.deadline,
             ctx.db.list_bounty_stakeholders(bounty.bounty_id).await?,
         );
-        ctx.ctx
-            .get_http_client()
-            .execute(EditMessage {
-                message_id: related_message.message_id,
-                channel_id: related_message.channel_id,
-                body: embed.into(),
-            })
+        approved_bounties_channel
+            .send_message(ctx.ctx, embed)
             .await?;
     }
+
     ctx.reply(create_embed!(
         description: format!("Unassigned you from `{bounty_num}`."),
         color: SUCCESS,
