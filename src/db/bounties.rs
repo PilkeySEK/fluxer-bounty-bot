@@ -6,7 +6,6 @@ use fluxer_neptunium::model::id::{
     Id,
     marker::{ChannelMarker, GuildMarker, MessageMarker, UserMarker},
 };
-use sqlx::postgres::PgQueryResult;
 
 use crate::db::{DbManager, guilds::BountyInfoKey};
 
@@ -79,40 +78,39 @@ impl DbManager {
 
     pub async fn create_bounty(&self, bounty: BountyCreateData) -> anyhow::Result<()> {
         sqlx::query!(
-            "INSERT INTO bounties (bounty_number, guild_id, created_by, content, state, created_at, assigned_to, related_message_id, related_channel_id, deadline)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
+            "INSERT INTO bounties (bounty_number, guild_id, created_by, content, state, created_at, related_message_id, related_channel_id, deadline)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
             bounty.bounty_number.0,
             bounty.guild_id.into_inner().cast_signed(),
             bounty.created_by.into_inner().cast_signed(),
             serde_json::to_value(&bounty.content)?,
             bounty.state.to_string(),
             bounty.created_at,
-            bounty.assigned_to.map(|id| id.into_inner().cast_signed()),
             bounty.related_message.map(|v| v.message_id.into_inner().cast_signed()),
             bounty.related_message.map(|v| v.channel_id.into_inner().cast_signed()),
             bounty.deadline,
         ).execute(&self.pool).await?;
         Ok(())
     }
-
-    pub async fn assign_user_to_bounty(
-        &self,
-        guild_id: Id<GuildMarker>,
-        bounty_number: BountyNum,
-        user_id: Option<Id<UserMarker>>,
-    ) -> anyhow::Result<PgQueryResult> {
-        Ok(sqlx::query!(
-            "UPDATE bounties
+    /*
+        pub async fn assign_user_to_bounty(
+            &self,
+            guild_id: Id<GuildMarker>,
+            bounty_number: BountyNum,
+            user_id: Option<Id<UserMarker>>,
+        ) -> anyhow::Result<PgQueryResult> {
+            Ok(sqlx::query!(
+                "UPDATE bounties
             SET assigned_to = $1
             WHERE guild_id = $2 AND bounty_number = $3",
-            user_id.map(|id| id.into_inner().cast_signed()),
-            guild_id.into_inner().cast_signed(),
-            bounty_number.0,
-        )
-        .execute(&self.pool)
-        .await?)
-    }
-
+                user_id.map(|id| id.into_inner().cast_signed()),
+                guild_id.into_inner().cast_signed(),
+                bounty_number.0,
+            )
+            .execute(&self.pool)
+            .await?)
+        }
+    */
     pub async fn set_bounty_content(
         &self,
         bounty_id: i64,
@@ -178,7 +176,6 @@ pub struct Bounty {
     pub content: BountySubmissionContent,
     pub state: BountyState,
     pub created_at: DateTime<Utc>,
-    pub assigned_to: Option<Id<UserMarker>>,
     pub related_message: Option<BountyRelatedMessage>,
     pub deadline: Option<DateTime<Utc>>,
 }
@@ -190,7 +187,6 @@ pub struct BountyCreateData {
     pub content: BountySubmissionContent,
     pub state: BountyState,
     pub created_at: DateTime<Utc>,
-    pub assigned_to: Option<Id<UserMarker>>,
     pub related_message: Option<BountyRelatedMessage>,
     pub deadline: Option<DateTime<Utc>>,
 }
@@ -206,7 +202,6 @@ impl TryFrom<BountySchema> for Bounty {
             content: serde_json::from_value(value.content)?,
             state: BountyState::from_str(&value.state)?,
             created_at: value.created_at,
-            assigned_to: value.assigned_to.map(|id| id.cast_unsigned().into()),
             related_message: if let Some(related_message_id) = value.related_message_id
                 && let Some(related_channel_id) = value.related_channel_id
             {
@@ -230,7 +225,6 @@ struct BountySchema {
     content: serde_json::Value,
     state: String,
     created_at: DateTime<Utc>,
-    assigned_to: Option<i64>,
     related_message_id: Option<i64>,
     related_channel_id: Option<i64>,
     deadline: Option<DateTime<Utc>>,

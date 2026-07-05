@@ -94,7 +94,7 @@ pub async fn handle_submission_create(
                     bounty_number,
                     now,
                     BountyState::Pending,
-                    None,
+                    Vec::new(),
                     deadline_timestamp,
                     Vec::new(),
                 ),
@@ -119,7 +119,6 @@ pub async fn handle_submission_create(
     };
     let bounty = BountyCreateData {
         bounty_number,
-        assigned_to: None,
         content: parsed,
         guild_id,
         state: BountyState::Pending,

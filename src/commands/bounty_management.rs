@@ -1,12 +1,17 @@
+use std::ops::ControlFlow;
+
 use anyhow::Context as _;
-use chrono::DateTime;
+use chrono::{DateTime, Utc};
 use enum_map::enum_map;
 use fluxer_neptunium::{
     create_embed,
     exts::{ChannelExt, MessageExt, UserExt},
     http::endpoints::channel::{DeleteMessage, EditMessage},
     model::{
-        id::{Id, marker::ChannelMarker},
+        id::{
+            Id,
+            marker::{ChannelMarker, UserMarker},
+        },
         time::timestamp::{Timestamp, representations::Iso8601},
     },
 };
@@ -16,6 +21,7 @@ use crate::{
     commands::CommandContext,
     db::{
         bounties::{BountyRelatedMessage, BountyState},
+        bounty_assignee_queue::QueuedBountyAssignee,
         guilds::BountyInfoKey,
     },
     util::{
@@ -89,7 +95,9 @@ async fn set_bounty_state_common(
                         bounty.bounty_number,
                         bounty.created_at,
                         new_state,
-                        bounty.assigned_to,
+                        ctx.db
+                            .list_assignee_queue_for_bounty(bounty.bounty_id)
+                            .await?,
                         bounty.deadline,
                         ctx.db.list_bounty_stakeholders(bounty.bounty_id).await?,
                     ),
@@ -206,9 +214,11 @@ pub async fn assign_to_bounty(ctx: CommandContext<'_>, args: &str) -> anyhow::Re
         return Ok(());
     };
 
-    ctx.db
-        .assign_user_to_bounty(ctx.guild_id, bounty_num, Some(user_id))
-        .await?;
+    let ControlFlow::Continue(assignees) =
+        try_assign_to_bounty(&ctx, bounty.bounty_id, user_id).await?
+    else {
+        return Ok(());
+    };
     if let Some(related_message) = bounty.related_message
         && let Err(e) = ctx
             .ctx
@@ -240,7 +250,7 @@ pub async fn assign_to_bounty(ctx: CommandContext<'_>, args: &str) -> anyhow::Re
             bounty_num,
             bounty.created_at,
             bounty.state,
-            Some(user_id),
+            assignees,
             bounty.deadline,
             ctx.db.list_bounty_stakeholders(bounty.bounty_id).await?,
         );
@@ -271,14 +281,6 @@ pub async fn self_assign_to_bounty(ctx: CommandContext<'_>, args: &str) -> anyho
         return Ok(());
     };
 
-    if let Some(assigned_to) = bounty.assigned_to {
-        ctx.reply(create_embed!(
-            description: format!("The bounty is already assigned to <@{assigned_to}>."),
-            color: FAILURE,
-        ))
-        .await?;
-        return Ok(());
-    }
     if bounty.state != BountyState::Approved {
         ctx.reply(create_embed!(
             description: "You cannot assign yourself to this bounty because it is not in the correct state.",
@@ -287,9 +289,11 @@ pub async fn self_assign_to_bounty(ctx: CommandContext<'_>, args: &str) -> anyho
         return Ok(());
     }
 
-    ctx.db
-        .assign_user_to_bounty(ctx.guild_id, bounty_num, Some(user_id))
-        .await?;
+    let ControlFlow::Continue(assignees) =
+        try_assign_to_bounty(&ctx, bounty.bounty_id, user_id).await?
+    else {
+        return Ok(());
+    };
     if let Some(related_message) = bounty.related_message
         && let Err(e) = ctx
             .ctx
@@ -321,7 +325,7 @@ pub async fn self_assign_to_bounty(ctx: CommandContext<'_>, args: &str) -> anyho
             bounty_num,
             bounty.created_at,
             bounty.state,
-            Some(user_id),
+            assignees,
             bounty.deadline,
             ctx.db.list_bounty_stakeholders(bounty.bounty_id).await?,
         );
@@ -340,7 +344,19 @@ pub async fn self_assign_to_bounty(ctx: CommandContext<'_>, args: &str) -> anyho
 }
 
 pub async fn unassign_from_bounty(ctx: CommandContext<'_>, args: &str) -> anyhow::Result<()> {
-    let (bounty_num, _rest) = get_bounty_num_from_args!(ctx, args, "assign");
+    let (bounty_num, rest) = get_bounty_num_from_args!(ctx, args, "unassign");
+
+    let MaybeExpired::NotExpired(user_id) = parse_user_arg(&ctx, rest.trim()).await? else {
+        return Ok(());
+    };
+    let Some(user_id) = user_id else {
+        ctx.reply(create_embed!(
+            description: "Could not find a user matching the query.",
+            color: FAILURE,
+        ))
+        .await?;
+        return Ok(());
+    };
 
     let bounty = ctx.db.get_bounty(ctx.guild_id, bounty_num).await?;
     let Some(bounty) = bounty else {
@@ -351,18 +367,19 @@ pub async fn unassign_from_bounty(ctx: CommandContext<'_>, args: &str) -> anyhow
         .await?;
         return Ok(());
     };
-    let Some(user_id) = bounty.assigned_to else {
+    let query_result = ctx
+        .db
+        .remove_user_from_assignee_queue(bounty.bounty_id, user_id)
+        .await?;
+    if query_result.rows_affected() == 0 {
         ctx.reply(create_embed!(
-            description: "No one is assigned to that bounty.",
+            description: "The user wasn't assigned or queued for that bounty.",
             color: FAILURE,
         ))
         .await?;
         return Ok(());
-    };
+    }
 
-    ctx.db
-        .assign_user_to_bounty(ctx.guild_id, bounty_num, None)
-        .await?;
     if let Some(related_message) = bounty.related_message
         && let Err(e) = ctx
             .ctx
@@ -394,7 +411,9 @@ pub async fn unassign_from_bounty(ctx: CommandContext<'_>, args: &str) -> anyhow
             bounty_num,
             bounty.created_at,
             bounty.state,
-            None,
+            ctx.db
+                .list_assignee_queue_for_bounty(bounty.bounty_id)
+                .await?,
             bounty.deadline,
             ctx.db.list_bounty_stakeholders(bounty.bounty_id).await?,
         );
@@ -424,7 +443,11 @@ pub async fn self_unassign_from_bounty(ctx: CommandContext<'_>, args: &str) -> a
         .await?;
         return Ok(());
     };
-    if bounty.assigned_to != Some(ctx.guild_member.id) {
+    let query_result = ctx
+        .db
+        .remove_user_from_assignee_queue(bounty.bounty_id, ctx.guild_member.id)
+        .await?;
+    if query_result.rows_affected() == 0 {
         ctx.reply(create_embed!(
             description: "You are not assigned to that bounty.",
             color: FAILURE,
@@ -432,9 +455,6 @@ pub async fn self_unassign_from_bounty(ctx: CommandContext<'_>, args: &str) -> a
         .await?;
         return Ok(());
     }
-    ctx.db
-        .assign_user_to_bounty(ctx.guild_id, bounty_num, None)
-        .await?;
     if let Some(related_message) = bounty.related_message
         && let Err(e) = ctx
             .ctx
@@ -466,7 +486,9 @@ pub async fn self_unassign_from_bounty(ctx: CommandContext<'_>, args: &str) -> a
             bounty_num,
             bounty.created_at,
             bounty.state,
-            None,
+            ctx.db
+                .list_assignee_queue_for_bounty(bounty.bounty_id)
+                .await?,
             bounty.deadline,
             ctx.db.list_bounty_stakeholders(bounty.bounty_id).await?,
         );
@@ -569,7 +591,9 @@ pub async fn edit_bounty(ctx: CommandContext<'_>, args: &str) -> anyhow::Result<
             bounty_num,
             bounty.created_at,
             bounty.state,
-            bounty.assigned_to,
+            ctx.db
+                .list_assignee_queue_for_bounty(bounty.bounty_id)
+                .await?,
             bounty.deadline,
             ctx.db.list_bounty_stakeholders(bounty.bounty_id).await?,
         );
@@ -590,4 +614,37 @@ pub async fn edit_bounty(ctx: CommandContext<'_>, args: &str) -> anyhow::Result<
     .await?;
 
     Ok(())
+}
+
+async fn try_assign_to_bounty(
+    ctx: &CommandContext<'_>,
+    bounty_id: i64,
+    user_id: Id<UserMarker>,
+) -> anyhow::Result<ControlFlow<(), Vec<QueuedBountyAssignee>>> {
+    const BOUNTY_ASSIGNEES_MAX_COUNT: i64 = 10;
+
+    let count = ctx.db.count_assignees_for_bounty(bounty_id).await?;
+    if count >= BOUNTY_ASSIGNEES_MAX_COUNT {
+        ctx.reply(create_embed!(
+            description: "The queue is full.",
+            color: FAILURE,
+        ))
+        .await?;
+        return Ok(ControlFlow::Break(()));
+    }
+    let query_result = ctx
+        .db
+        .add_user_to_assignee_queue(bounty_id, user_id, Utc::now())
+        .await?;
+    if query_result.rows_affected() == 0 {
+        ctx.reply(create_embed!(
+            description: "You are already assigned or queued for that bounty.",
+            color: FAILURE,
+        ))
+        .await?;
+        return Ok(ControlFlow::Break(()));
+    }
+    Ok(ControlFlow::Continue(
+        ctx.db.list_assignee_queue_for_bounty(bounty_id).await?,
+    ))
 }

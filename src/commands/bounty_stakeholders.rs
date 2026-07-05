@@ -93,7 +93,9 @@ async fn add_bounty_stakeholder(ctx: CommandContext<'_>, args: &str) -> anyhow::
                     bounty_num,
                     bounty.created_at,
                     bounty.state,
-                    bounty.assigned_to,
+                    ctx.db
+                        .list_assignee_queue_for_bounty(bounty.bounty_id)
+                        .await?,
                     bounty.deadline,
                     ctx.db.list_bounty_stakeholders(bounty.bounty_id).await?,
                 )
@@ -160,7 +162,9 @@ async fn remove_bounty_stakeholder(ctx: CommandContext<'_>, args: &str) -> anyho
                     bounty_num,
                     bounty.created_at,
                     bounty.state,
-                    bounty.assigned_to,
+                    ctx.db
+                        .list_assignee_queue_for_bounty(bounty.bounty_id)
+                        .await?,
                     bounty.deadline,
                     ctx.db.list_bounty_stakeholders(bounty.bounty_id).await?,
                 )

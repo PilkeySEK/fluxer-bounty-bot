@@ -22,6 +22,7 @@ use crate::{
     colors::SUBMISSION_PENDING,
     db::{
         bounties::{BountyNum, BountyState, BountySubmissionContent},
+        bounty_assignee_queue::QueuedBountyAssignee,
         bounty_stakeholders::BountyStakeholder,
         guilds::{BountyInfoKey, BountySubmissionFormat},
     },
@@ -138,6 +139,7 @@ pub fn parse_message_content_as_submission(
     content
 }
 
+#[expect(clippy::too_many_lines)]
 #[expect(clippy::too_many_arguments, reason = "so what?")]
 pub fn bounty_content_to_message(
     content: &BountySubmissionContent,
@@ -146,7 +148,7 @@ pub fn bounty_content_to_message(
     bounty_number: BountyNum,
     created_at: DateTime<Utc>,
     state: BountyState,
-    assigned_to: Option<Id<UserMarker>>,
+    mut assignees: Vec<QueuedBountyAssignee>,
     deadline: Option<DateTime<Utc>>,
     stakeholders: Vec<BountyStakeholder>,
 ) -> MessageEmbed {
@@ -169,9 +171,26 @@ pub fn bounty_content_to_message(
     }
     let mut description = description.join("\n");
     description.push_str("\n===\n");
-    if let Some(assigned_to) = assigned_to {
-        let assigned_to_string = format!("**Assigned to**\n<@{assigned_to}>\n");
-        description.push_str(&assigned_to_string);
+    description.push_str("**Assigned to**\n");
+    if assignees.is_empty() {
+        description.push_str("*No one*\n");
+    } else {
+        assignees.sort_by_key(|elem| elem.queued_at);
+        let mut is_first = true;
+        let assignees_string = assignees
+            .into_iter()
+            .map(|assignee| {
+                if is_first {
+                    is_first = false;
+                    format!("[**Assigned**] <@{}>", assignee.user_id)
+                } else {
+                    format!("[**Queued**] <@{}>", assignee.user_id)
+                }
+            })
+            .collect::<Vec<String>>()
+            .join("\n");
+        description.push_str(&assignees_string);
+        description.push('\n');
     }
     if let Some(deadline) = deadline {
         // Maybe take the description from `content` instead? Seems super unnecessary though since it probably wouldn't change anyway in 99% of cases

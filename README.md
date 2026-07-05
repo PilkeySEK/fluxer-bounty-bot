@@ -1,0 +1,1 @@
+Note: You may need to install `sqlx-cli` with the `sqlx-toml` feature for `cargo sqlx` to work correctly.

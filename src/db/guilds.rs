@@ -221,7 +221,7 @@ impl Default for BountySubmissionFormat {
     fn default() -> Self {
         let titles = enum_map! {
             BountyInfoKey::Title => vec!["Title".to_owned(), "Bounty Title".to_owned()],
-            BountyInfoKey::Deadline => vec!["Due Date".to_owned(), "Due Date (Timeline)".to_owned(), "Deadline".to_owned()],
+            BountyInfoKey::Deadline => vec!["Due Date".to_owned(), "Due Date (Timeline)".to_owned(), "Deadline".to_owned(), "Due Date (Optional)".to_owned()],
             BountyInfoKey::IssueUrl => vec!["Issue URL (Optional)".to_owned(), "Issue URL".to_owned()],
             BountyInfoKey::AdditionalInfo => vec!["Additional Information".to_owned(), "Additional Info".to_owned()],
             BountyInfoKey::JudgingCriteria => vec!["Judging Criteria".to_owned()],

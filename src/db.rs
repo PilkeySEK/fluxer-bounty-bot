@@ -8,6 +8,7 @@ use sqlx::PgPool;
 use crate::db::{guild_permissions::GuildPermissionsEntry, guilds::GuildConfig};
 
 pub mod bounties;
+pub mod bounty_assignee_queue;
 pub mod bounty_stakeholders;
 pub mod guild_permissions;
 pub mod guilds;
