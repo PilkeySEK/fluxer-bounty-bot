@@ -53,23 +53,31 @@ impl DbManager {
         Ok(Some(raw.try_into().context("Failed to convert")?))
     }
 
-    /// Won't take the previous state of the bounty into account.
-    pub async fn set_bounty_state_and_related_message(
+    pub async fn set_bounty_state(&self, bounty_id: i64, state: BountyState) -> anyhow::Result<()> {
+        sqlx::query!(
+            "UPDATE bounties
+            SET state = $1
+            WHERE bounty_id = $2",
+            state.to_string(),
+            bounty_id,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn set_bounty_related_message(
         &self,
-        guild_id: Id<GuildMarker>,
-        bounty_number: BountyNum,
-        state: BountyState,
+        bounty_id: i64,
         related_message: Option<BountyRelatedMessage>,
     ) -> anyhow::Result<()> {
         sqlx::query!(
             "UPDATE bounties
-            SET state = $1, related_message_id = $2, related_channel_id = $3
-            WHERE guild_id = $4 AND bounty_number = $5",
-            state.to_string(),
+            SET related_message_id = $1, related_channel_id = $2
+            WHERE bounty_id = $3",
             related_message.map(|related| related.message_id.into_inner().cast_signed()),
             related_message.map(|related| related.channel_id.into_inner().cast_signed()),
-            guild_id.into_inner().cast_signed(),
-            bounty_number.0,
+            bounty_id,
         )
         .execute(&self.pool)
         .await?;

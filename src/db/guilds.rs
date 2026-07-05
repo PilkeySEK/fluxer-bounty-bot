@@ -211,7 +211,7 @@ pub enum BountyInfoKey {
     BountyAmount,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct BountySubmissionFormat {
     pub titles: EnumMap<BountyInfoKey, Vec<String>>,
     pub required: EnumSet<BountyInfoKey>,
@@ -236,6 +236,7 @@ impl Default for BountySubmissionFormat {
     }
 }
 
+#[derive(Clone)]
 pub struct GuildConfig {
     #[expect(unused)]
     pub guild_id: Id<GuildMarker>,

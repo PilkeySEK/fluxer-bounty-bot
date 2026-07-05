@@ -5,13 +5,10 @@ use chrono::{DateTime, Utc};
 use enum_map::enum_map;
 use fluxer_neptunium::{
     create_embed,
-    exts::{ChannelExt, MessageExt, UserExt},
+    exts::{MessageExt, UserExt},
     http::endpoints::channel::{DeleteMessage, EditMessage},
     model::{
-        id::{
-            Id,
-            marker::{ChannelMarker, UserMarker},
-        },
+        id::{Id, marker::UserMarker},
         time::timestamp::{Timestamp, representations::Iso8601},
     },
 };
@@ -21,13 +18,12 @@ use crate::{
     commands::CommandContext,
     db::{
         bounties::{BountyRelatedMessage, BountyState},
-        bounty_assignee_queue::QueuedBountyAssignee,
         guilds::BountyInfoKey,
     },
     util::{
         bounty_content_to_message,
         confirmation::{MaybeExpired, confirmation},
-        get_bounty_num_from_args,
+        get_bounty_num_from_args, update_bounty_message,
         user_arg::parse_user_arg,
     },
 };
@@ -35,18 +31,15 @@ use crate::{
 // TODO: When replying to a message and not providing the bounty number, try to get the bounty from the replied-to message.
 
 pub async fn complete_bounty(ctx: CommandContext<'_>, args: &str) -> anyhow::Result<()> {
-    let new_channel = ctx.guild_config.completed_bounties_channel;
-    set_bounty_state_common(ctx, args, "complete", BountyState::Completed, new_channel).await
+    set_bounty_state_common(ctx, args, "complete", BountyState::Completed).await
 }
 
 pub async fn approve_bounty(ctx: CommandContext<'_>, args: &str) -> anyhow::Result<()> {
-    let new_channel = ctx.guild_config.approved_bounties_channel;
-    set_bounty_state_common(ctx, args, "approve", BountyState::Approved, new_channel).await
+    set_bounty_state_common(ctx, args, "approve", BountyState::Approved).await
 }
 
 pub async fn reject_bounty(ctx: CommandContext<'_>, args: &str) -> anyhow::Result<()> {
-    let new_channel = ctx.guild_config.rejected_bounties_channel;
-    set_bounty_state_common(ctx, args, "reject", BountyState::Rejected, new_channel).await
+    set_bounty_state_common(ctx, args, "reject", BountyState::Rejected).await
 }
 
 async fn set_bounty_state_common(
@@ -54,11 +47,10 @@ async fn set_bounty_state_common(
     args: &str,
     operation: &str,
     new_state: BountyState,
-    new_channel: Option<Id<ChannelMarker>>,
 ) -> anyhow::Result<()> {
     let (bounty_num, _rest) = get_bounty_num_from_args!(ctx, args, operation);
 
-    let Some(bounty) = ctx.db.get_bounty(ctx.guild_id, bounty_num).await? else {
+    let Some(mut bounty) = ctx.db.get_bounty(ctx.guild_id, bounty_num).await? else {
         ctx.reply(create_embed!(
             description: "A bounty with that ID does not exist.",
             color: FAILURE,
@@ -76,61 +68,9 @@ async fn set_bounty_state_common(
         return Ok(());
     }
 
-    let new_related_message = if let Some(new_channel) = new_channel {
-        let created_by = match bounty.created_by.get_user(ctx.ctx).await {
-            Ok(created_by) => either::Either::Left(created_by.clone_inner()),
-            Err(e) => {
-                tracing::warn!("Error fetching user {}: {e}", bounty.created_by);
-                either::Either::Right(bounty.created_by)
-            }
-        };
-        Some(
-            new_channel
-                .send_message(
-                    ctx.ctx,
-                    bounty_content_to_message(
-                        &bounty.content,
-                        created_by,
-                        &ctx.guild_config.bounty_submission_format,
-                        bounty.bounty_number,
-                        bounty.created_at,
-                        new_state,
-                        ctx.db
-                            .list_assignee_queue_for_bounty(bounty.bounty_id)
-                            .await?,
-                        bounty.deadline,
-                        ctx.db.list_bounty_stakeholders(bounty.bounty_id).await?,
-                    ),
-                )
-                .await?,
-        )
-    } else {
-        None
-    };
-    if let Some(related_message) = bounty.related_message
-        && let Err(e) = ctx
-            .ctx
-            .get_http_client()
-            .execute(DeleteMessage {
-                channel_id: related_message.channel_id,
-                message_id: related_message.message_id,
-            })
-            .await
-    {
-        tracing::error!("Error deleting related message: {e}");
-    }
-
-    ctx.db
-        .set_bounty_state_and_related_message(
-            ctx.guild_id,
-            bounty_num,
-            new_state,
-            new_related_message.map(|msg| BountyRelatedMessage {
-                message_id: msg.id,
-                channel_id: msg.channel_id,
-            }),
-        )
-        .await?;
+    ctx.db.set_bounty_state(bounty.bounty_id, new_state).await?;
+    bounty.state = new_state;
+    update_bounty_message(ctx.ctx, ctx.db, ctx.guild_config, bounty);
 
     ctx.reply(
             create_embed!(
@@ -214,50 +154,13 @@ pub async fn assign_to_bounty(ctx: CommandContext<'_>, args: &str) -> anyhow::Re
         return Ok(());
     };
 
-    let ControlFlow::Continue(assignees) =
-        try_assign_to_bounty(&ctx, bounty.bounty_id, user_id).await?
-    else {
-        return Ok(());
-    };
-    if let Some(related_message) = bounty.related_message
-        && let Err(e) = ctx
-            .ctx
-            .get_http_client()
-            .execute(DeleteMessage {
-                message_id: related_message.message_id,
-                channel_id: related_message.channel_id,
-            })
-            .await
+    if try_assign_to_bounty(&ctx, bounty.bounty_id, user_id)
+        .await?
+        .is_break()
     {
-        tracing::error!(
-            "Error deleting message {} in channel {}: {e}",
-            related_message.message_id,
-            related_message.channel_id
-        );
+        return Ok(());
     }
-    if let Some(assigned_bounties_channel) = ctx.guild_config.claimed_bounties_channel {
-        let created_by = match bounty.created_by.get_user(ctx.ctx).await {
-            Ok(created_by) => either::Either::Left(created_by.clone_inner()),
-            Err(e) => {
-                tracing::warn!("Error fetching user {}: {e}", bounty.created_by);
-                either::Either::Right(bounty.created_by)
-            }
-        };
-        let embed = bounty_content_to_message(
-            &bounty.content,
-            created_by,
-            &ctx.guild_config.bounty_submission_format,
-            bounty_num,
-            bounty.created_at,
-            bounty.state,
-            assignees,
-            bounty.deadline,
-            ctx.db.list_bounty_stakeholders(bounty.bounty_id).await?,
-        );
-        assigned_bounties_channel
-            .send_message(ctx.ctx, embed)
-            .await?;
-    }
+    update_bounty_message(ctx.ctx, ctx.db, ctx.guild_config, bounty);
 
     ctx.reply(create_embed!(
         description: format!("Assigned <@{user_id}> to the bounty `{bounty_num}`."),
@@ -289,50 +192,13 @@ pub async fn self_assign_to_bounty(ctx: CommandContext<'_>, args: &str) -> anyho
         return Ok(());
     }
 
-    let ControlFlow::Continue(assignees) =
-        try_assign_to_bounty(&ctx, bounty.bounty_id, user_id).await?
-    else {
-        return Ok(());
-    };
-    if let Some(related_message) = bounty.related_message
-        && let Err(e) = ctx
-            .ctx
-            .get_http_client()
-            .execute(DeleteMessage {
-                message_id: related_message.message_id,
-                channel_id: related_message.channel_id,
-            })
-            .await
+    if try_assign_to_bounty(&ctx, bounty.bounty_id, user_id)
+        .await?
+        .is_break()
     {
-        tracing::error!(
-            "Error deleting message {} in channel {}: {e}",
-            related_message.message_id,
-            related_message.channel_id
-        );
+        return Ok(());
     }
-    if let Some(assigned_bounties_channel) = ctx.guild_config.claimed_bounties_channel {
-        let created_by = match bounty.created_by.get_user(ctx.ctx).await {
-            Ok(created_by) => either::Either::Left(created_by.clone_inner()),
-            Err(e) => {
-                tracing::warn!("Error fetching user {}: {e}", bounty.created_by);
-                either::Either::Right(bounty.created_by)
-            }
-        };
-        let embed = bounty_content_to_message(
-            &bounty.content,
-            created_by,
-            &ctx.guild_config.bounty_submission_format,
-            bounty_num,
-            bounty.created_at,
-            bounty.state,
-            assignees,
-            bounty.deadline,
-            ctx.db.list_bounty_stakeholders(bounty.bounty_id).await?,
-        );
-        assigned_bounties_channel
-            .send_message(ctx.ctx, embed)
-            .await?;
-    }
+    update_bounty_message(ctx.ctx, ctx.db, ctx.guild_config, bounty);
 
     ctx.reply(create_embed!(
         description: format!("Assigned yourself to the bounty `{bounty_num}`."),
@@ -380,47 +246,7 @@ pub async fn unassign_from_bounty(ctx: CommandContext<'_>, args: &str) -> anyhow
         return Ok(());
     }
 
-    if let Some(related_message) = bounty.related_message
-        && let Err(e) = ctx
-            .ctx
-            .get_http_client()
-            .execute(DeleteMessage {
-                message_id: related_message.message_id,
-                channel_id: related_message.channel_id,
-            })
-            .await
-    {
-        tracing::error!(
-            "Error deleting message {} in channel {}: {e}",
-            related_message.message_id,
-            related_message.channel_id
-        );
-    }
-    if let Some(approved_bounties_channel) = ctx.guild_config.approved_bounties_channel {
-        let created_by = match bounty.created_by.get_user(ctx.ctx).await {
-            Ok(created_by) => either::Either::Left(created_by.clone_inner()),
-            Err(e) => {
-                tracing::warn!("Error fetching user {}: {e}", bounty.created_by);
-                either::Either::Right(bounty.created_by)
-            }
-        };
-        let embed = bounty_content_to_message(
-            &bounty.content,
-            created_by,
-            &ctx.guild_config.bounty_submission_format,
-            bounty_num,
-            bounty.created_at,
-            bounty.state,
-            ctx.db
-                .list_assignee_queue_for_bounty(bounty.bounty_id)
-                .await?,
-            bounty.deadline,
-            ctx.db.list_bounty_stakeholders(bounty.bounty_id).await?,
-        );
-        approved_bounties_channel
-            .send_message(ctx.ctx, embed)
-            .await?;
-    }
+    update_bounty_message(ctx.ctx, ctx.db, ctx.guild_config, bounty);
 
     ctx.reply(create_embed!(
         description: format!("Unassigned <@{user_id}> from the bounty `{bounty_num}`."),
@@ -455,47 +281,8 @@ pub async fn self_unassign_from_bounty(ctx: CommandContext<'_>, args: &str) -> a
         .await?;
         return Ok(());
     }
-    if let Some(related_message) = bounty.related_message
-        && let Err(e) = ctx
-            .ctx
-            .get_http_client()
-            .execute(DeleteMessage {
-                message_id: related_message.message_id,
-                channel_id: related_message.channel_id,
-            })
-            .await
-    {
-        tracing::error!(
-            "Error deleting message {} in channel {}: {e}",
-            related_message.message_id,
-            related_message.channel_id
-        );
-    }
-    if let Some(approved_bounties_channel) = ctx.guild_config.approved_bounties_channel {
-        let created_by = match bounty.created_by.get_user(ctx.ctx).await {
-            Ok(created_by) => either::Either::Left(created_by.clone_inner()),
-            Err(e) => {
-                tracing::warn!("Error fetching user {}: {e}", bounty.created_by);
-                either::Either::Right(bounty.created_by)
-            }
-        };
-        let embed = bounty_content_to_message(
-            &bounty.content,
-            created_by,
-            &ctx.guild_config.bounty_submission_format,
-            bounty_num,
-            bounty.created_at,
-            bounty.state,
-            ctx.db
-                .list_assignee_queue_for_bounty(bounty.bounty_id)
-                .await?,
-            bounty.deadline,
-            ctx.db.list_bounty_stakeholders(bounty.bounty_id).await?,
-        );
-        approved_bounties_channel
-            .send_message(ctx.ctx, embed)
-            .await?;
-    }
+
+    update_bounty_message(ctx.ctx, ctx.db, ctx.guild_config, bounty);
 
     ctx.reply(create_embed!(
         description: format!("Unassigned you from `{bounty_num}`."),
@@ -620,7 +407,7 @@ async fn try_assign_to_bounty(
     ctx: &CommandContext<'_>,
     bounty_id: i64,
     user_id: Id<UserMarker>,
-) -> anyhow::Result<ControlFlow<(), Vec<QueuedBountyAssignee>>> {
+) -> anyhow::Result<ControlFlow<()>> {
     const BOUNTY_ASSIGNEES_MAX_COUNT: i64 = 10;
 
     let count = ctx.db.count_assignees_for_bounty(bounty_id).await?;
@@ -644,7 +431,5 @@ async fn try_assign_to_bounty(
         .await?;
         return Ok(ControlFlow::Break(()));
     }
-    Ok(ControlFlow::Continue(
-        ctx.db.list_assignee_queue_for_bounty(bounty_id).await?,
-    ))
+    Ok(ControlFlow::Continue(()))
 }

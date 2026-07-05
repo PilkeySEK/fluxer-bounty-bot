@@ -1,11 +1,14 @@
 use std::{collections::HashMap, fmt::Write, iter::Peekable, str::Lines};
 
+use anyhow::Context as _;
 use chrono::{DateTime, Utc};
 use either::Either;
 use enum_map::EnumMap;
 use fluxer_neptunium::{
     create_embed,
-    exts::UserExt,
+    events::context::Context,
+    exts::{ChannelExt, UserExt},
+    http::endpoints::channel::{DeleteMessage, EditMessage},
     model::{
         channel::message::embed::{EmbedFooter, MessageEmbed},
         id::{
@@ -21,10 +24,11 @@ use crate::{
     AVATAR_URL_BASE, STATIC_BASE,
     colors::SUBMISSION_PENDING,
     db::{
-        bounties::{BountyNum, BountyState, BountySubmissionContent},
+        DbManager,
+        bounties::{Bounty, BountyNum, BountyRelatedMessage, BountyState, BountySubmissionContent},
         bounty_assignee_queue::QueuedBountyAssignee,
         bounty_stakeholders::BountyStakeholder,
-        guilds::{BountyInfoKey, BountySubmissionFormat},
+        guilds::{BountyInfoKey, BountySubmissionFormat, GuildConfig},
     },
 };
 
@@ -273,6 +277,148 @@ pub fn bounty_content_to_message(
     });
     embed.timestamp = Some(created_at.into());
     embed
+}
+
+pub fn update_bounty_message(
+    ctx: &Context,
+    db: &DbManager,
+    guild_config: &GuildConfig,
+    bounty: Bounty,
+) {
+    let ctx = ctx.clone();
+    let db = db.clone();
+    let guild_config = guild_config.clone();
+    tokio::spawn(async move {
+        let bounty_id = bounty.bounty_id;
+        if let Err(e) = update_bounty_message_inner(&ctx, &db, &guild_config, bounty)
+            .await
+            .with_context(|| format!("Updating the bounty message for bounty {bounty_id}"))
+        {
+            tracing::error!("{e:?}");
+        }
+    });
+}
+
+/// Update the bounty message. Might delete the existing message, edit it and create a new one.
+/// Will update the related message in the database too.
+#[expect(clippy::too_many_lines)]
+async fn update_bounty_message_inner(
+    ctx: &Context,
+    db: &DbManager,
+    guild_config: &GuildConfig,
+    bounty: Bounty,
+) -> anyhow::Result<()> {
+    let assignees = db.list_assignee_queue_for_bounty(bounty.bounty_id).await?;
+    let assignees_is_empty = assignees.is_empty();
+    let embed = bounty_content_to_message(
+        &bounty.content,
+        match bounty.created_by.get_user(ctx).await {
+            Ok(user) => either::Either::Left(user.clone_inner()),
+            Err(e) => {
+                tracing::warn!("Error fetching user {}: {}", bounty.created_by, e);
+                either::Either::Right(bounty.created_by)
+            }
+        },
+        &guild_config.bounty_submission_format,
+        bounty.bounty_number,
+        bounty.created_at,
+        bounty.state,
+        assignees,
+        bounty.deadline,
+        db.list_bounty_stakeholders(bounty.bounty_id).await?,
+    );
+
+    let channel_id = if !assignees_is_empty && bounty.state == BountyState::Approved {
+        guild_config.claimed_bounties_channel
+    } else {
+        match bounty.state {
+            BountyState::Approved => guild_config.approved_bounties_channel,
+            BountyState::Completed => guild_config.completed_bounties_channel,
+            BountyState::Pending => guild_config.approval_queue_channel,
+            BountyState::Rejected => guild_config.rejected_bounties_channel,
+        }
+    };
+
+    if let Some(channel_id) = channel_id {
+        if let Some(related_message) = bounty.related_message {
+            if related_message.channel_id == channel_id {
+                ctx.get_http_client()
+                    .execute(EditMessage {
+                        channel_id: related_message.channel_id,
+                        message_id: related_message.message_id,
+                        body: embed.into(),
+                    })
+                    .await
+                    .with_context(|| {
+                        format!(
+                            "Editing existing message related to bounty {}",
+                            bounty.bounty_id
+                        )
+                    })?;
+            } else {
+                if let Err(e) = ctx
+                    .get_http_client()
+                    .execute(DeleteMessage {
+                        channel_id: related_message.channel_id,
+                        message_id: related_message.message_id,
+                    })
+                    .await
+                {
+                    tracing::warn!(
+                        "Error deleting bounty related message {} in channel {} related to bounty {}: {}",
+                        related_message.message_id,
+                        related_message.channel_id,
+                        bounty.bounty_id,
+                        e
+                    );
+                }
+                let message = channel_id.send_message(ctx, embed).await.with_context(|| {
+                    format!("Sending message related to bounty {}", bounty.bounty_id)
+                })?;
+                db.set_bounty_related_message(
+                    bounty.bounty_id,
+                    Some(BountyRelatedMessage {
+                        channel_id: message.channel_id,
+                        message_id: message.id,
+                    }),
+                )
+                .await?;
+            }
+        } else {
+            let message = channel_id.send_message(ctx, embed).await.with_context(|| {
+                format!("Sending message related to bounty {}", bounty.bounty_id)
+            })?;
+            db.set_bounty_related_message(
+                bounty.bounty_id,
+                Some(BountyRelatedMessage {
+                    channel_id: message.channel_id,
+                    message_id: message.id,
+                }),
+            )
+            .await?;
+        }
+    } else if let Some(related_message) = bounty.related_message {
+        if let Err(e) = ctx
+            .get_http_client()
+            .execute(DeleteMessage {
+                channel_id: related_message.channel_id,
+                message_id: related_message.message_id,
+            })
+            .await
+        {
+            tracing::warn!(
+                "Error deleting bounty related message {} in channel {} related to bounty {}: {}",
+                related_message.message_id,
+                related_message.channel_id,
+                bounty.bounty_id,
+                e
+            );
+        }
+        db.set_bounty_related_message(bounty.bounty_id, None)
+            .await?;
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]

@@ -221,7 +221,7 @@ impl CommandDispatcher {
         if let Err(e) = f.call(ctx, args).await {
             let random_error_id = Alphabetic.sample_string(&mut rand::rng(), 16);
             tracing::error!(
-                "[{random_error_id}] Error executing command `{command}` with args `{args}`: {e}"
+                "[{random_error_id}] Error executing command `{command}` with args `{args}`: {e:?}"
             );
             message_backup.reply(ctx_ctx_backup, create_embed!(
                 description: format!("There was an error executing the command. `{random_error_id}`"),
