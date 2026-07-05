@@ -1,13 +1,18 @@
 use std::time::Duration;
 
+use anyhow::Context as _;
 use chrono::{DateTime, Utc};
 use fluxer_neptunium::{
     cached_payload::CachedMessageCreate,
     create_embed,
     events::context::Context,
     exts::{ChannelExt, MessageExt},
+    http::endpoints::channel::CreatePrivateChannel,
     model::{
-        id::{Id, marker::GuildMarker},
+        id::{
+            Id,
+            marker::{GuildMarker, UserMarker},
+        },
         time::timestamp::{Timestamp, representations::Iso8601},
         user::PartialUser,
     },
@@ -57,6 +62,16 @@ pub async fn handle_submission_create(
             description: format!("Your submission is missing the following: {key_descriptors}"),
             color: FAILURE,
         )).await;
+        if let Err(e) = dm_user(
+            ctx,
+            format!("This was your message:\n\n{}", message.content),
+            message.author.id,
+        )
+        .await
+        .with_context(|| format!("Failed to DM {}", message.author.id))
+        {
+            tracing::warn!("{e:?}");
+        }
         // Delete the original message after 10 seconds.
         tokio::time::sleep(Duration::from_secs(10)).await;
         message.delete(ctx).await?;
@@ -71,6 +86,16 @@ pub async fn handle_submission_create(
                 description: format!("The timestamp provided in the due date could not be parsed. Make sure to format it in the Fluxer timestamp format."),
                 color: FAILURE,
             )).await;
+            if let Err(e) = dm_user(
+                ctx,
+                format!("This was your message:\n\n{}", message.content),
+                message.author.id,
+            )
+            .await
+            .with_context(|| format!("Failed to DM {}", message.author.id))
+            {
+                tracing::warn!("{e:?}");
+            }
             tokio::time::sleep(Duration::from_secs(10)).await;
             message.delete(ctx).await?;
             reply_result?.delete(ctx).await?;
@@ -144,5 +169,27 @@ pub async fn handle_submission_create(
     tokio::time::sleep(Duration::from_secs(5)).await;
     message.delete(ctx).await?;
     message_send_result?.delete(ctx).await?;
+    Ok(())
+}
+
+async fn dm_user(ctx: &Context, content: String, user_id: Id<UserMarker>) -> anyhow::Result<()> {
+    let mut my_private_channels = ctx.list_own_private_channels().await?;
+    for channel in &mut my_private_channels {
+        channel.refresh();
+    }
+    let channel = my_private_channels.into_iter().find(|channel| {
+        channel
+            .recipients
+            .as_ref()
+            .is_some_and(|recipients| recipients.len() == 1 && recipients[0].id == user_id)
+    });
+    if let Some(channel) = channel {
+        channel.send_message(ctx, content).await?;
+    } else {
+        let channel = ctx
+            .create_private_channel(CreatePrivateChannel::Dm(user_id))
+            .await?;
+        channel.send_message(ctx, content).await?;
+    }
     Ok(())
 }
