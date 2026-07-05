@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE bounties\n            SET state = $1\n            WHERE bounty_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8b56e169c163c8fa93fe616e274e7e961f0e5cf9db28deb486342f859f90def8"
+}

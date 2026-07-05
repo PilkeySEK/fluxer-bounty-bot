@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO bounties (bounty_number, guild_id, created_by, content, state, created_at, related_message_id, related_channel_id, deadline)\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Int8",
+        "Jsonb",
+        "Text",
+        "Timestamptz",
+        "Int8",
+        "Int8",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "63ddda1fee4dc086dc6857f3f4062bd5fe5c9afa70def4d17ccd23c7978b5a54"
+}
