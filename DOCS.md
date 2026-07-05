@@ -93,19 +93,19 @@ Use these values for `<channel-type>`:
 
 ## Bounty Management
 
-| Command Syntax                                       | Role           | Description                                                  |
-| ---------------------------------------------------- | -------------- | ------------------------------------------------------------ |
-| `self-assign <bounty_id>`                            | Bounty Hunter  | Assign an approved bounty to yourself (only if unassigned).  |
-| `self-unassign <bounty_id>`                          | Bounty Hunter  | Unassign yourself from a bounty.                             |
-| `assign <bounty_id> <user>`                          | Bounty Manager | Assign a bounty to a community member.                       |
-| `unassign <bounty_id>`                               | Bounty Manager | Unassign the current assignee from a bounty.                 |
-| `approve <bounty_id>`                                | Bounty Manager | Approve a pending bounty.                                    |
-| `complete <bounty_id>`                               | Bounty Manager | Mark a bounty as completed.                                  |
-| `edit <bounty_id> <field> [value]`                   | Bounty Manager | Edit a bounty field.                                         |
-| `reject <bounty_id>`                                 | Bounty Manager | Reject a bounty.                                             |
-| `delete <bounty_id>`                                 | Bounty Manager | **Permanently delete a bounty (cannot be undone).**          |
-| `stakeholder add <bounty_id> <amount> <user> [note]` | Bounty Manager | Add a stakeholder contribution.                              |
-| `stakeholder remove <bounty_id> <user>`              | Bounty Manager | **Remove all stakeholder contributions (cannot be undone).** |
+| Command Syntax                                       | Role           | Description                                                                                               |
+| ---------------------------------------------------- | -------------- | --------------------------------------------------------------------------------------------------------- |
+| `self-assign <bounty_id>`                            | Bounty Hunter  | Assign an approved bounty to yourself (adding you to the queue if someone else was already assigned).     |
+| `self-unassign <bounty_id>`                          | Bounty Hunter  | Unassign yourself from a bounty (you may lose your spot in the queue if you were queued).                 |
+| `assign <bounty_id> <user>`                          | Bounty Manager | Assign a bounty to a community member (may add the member to the queue instead).                          |
+| `unassign <bounty_id> <user>`                        | Bounty Manager | Unassign the user from a bounty or remove them from the queue.                                            |
+| `approve <bounty_id>`                                | Bounty Manager | Approve a pending bounty.                                                                                 |
+| `complete <bounty_id>`                               | Bounty Manager | Mark a bounty as completed.                                                                               |
+| `edit <bounty_id> <field> [value]`                   | Bounty Manager | Edit a bounty field.                                                                                      |
+| `reject <bounty_id>`                                 | Bounty Manager | Reject a bounty.                                                                                          |
+| `delete <bounty_id>`                                 | Bounty Manager | **Permanently delete a bounty (cannot be undone).**                                                       |
+| `stakeholder add <bounty_id> <amount> <user> [note]` | Bounty Manager | Add a stakeholder contribution.                                                                           |
+| `stakeholder remove <bounty_id> <user>`              | Bounty Manager | **Remove all stakeholder contributions (cannot be undone).**                                              |
 
 ### Bounty Management Aliases
 
