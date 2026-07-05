@@ -5,8 +5,8 @@ use chrono::{DateTime, Utc};
 use enum_map::enum_map;
 use fluxer_neptunium::{
     create_embed,
-    exts::{MessageExt, UserExt},
-    http::endpoints::channel::{DeleteMessage, EditMessage},
+    exts::MessageExt,
+    http::endpoints::channel::DeleteMessage,
     model::{
         id::{Id, marker::UserMarker},
         time::timestamp::{Timestamp, representations::Iso8601},
@@ -21,7 +21,6 @@ use crate::{
         guilds::BountyInfoKey,
     },
     util::{
-        bounty_content_to_message,
         confirmation::{MaybeExpired, confirmation},
         get_bounty_num_from_args, update_bounty_message,
         user_arg::parse_user_arg,
@@ -292,7 +291,6 @@ pub async fn self_unassign_from_bounty(ctx: CommandContext<'_>, args: &str) -> a
     Ok(())
 }
 
-#[expect(clippy::too_many_lines)]
 pub async fn edit_bounty(ctx: CommandContext<'_>, args: &str) -> anyhow::Result<()> {
     let field_descriptors = enum_map! {
         BountyInfoKey::Title => "title",
@@ -363,36 +361,7 @@ pub async fn edit_bounty(ctx: CommandContext<'_>, args: &str) -> anyhow::Result<
             .await?;
     }
 
-    if let Some(related_message) = bounty.related_message {
-        let created_by = match bounty.created_by.get_user(ctx.ctx).await {
-            Ok(created_by) => either::Either::Left(created_by.clone_inner()),
-            Err(e) => {
-                tracing::warn!("Error fetching user {}: {e}", bounty.created_by);
-                either::Either::Right(bounty.created_by)
-            }
-        };
-        let embed = bounty_content_to_message(
-            &bounty.content,
-            created_by,
-            &ctx.guild_config.bounty_submission_format,
-            bounty_num,
-            bounty.created_at,
-            bounty.state,
-            ctx.db
-                .list_assignee_queue_for_bounty(bounty.bounty_id)
-                .await?,
-            bounty.deadline,
-            ctx.db.list_bounty_stakeholders(bounty.bounty_id).await?,
-        );
-        ctx.ctx
-            .get_http_client()
-            .execute(EditMessage {
-                message_id: related_message.message_id,
-                channel_id: related_message.channel_id,
-                body: embed.into(),
-            })
-            .await?;
-    }
+    update_bounty_message(ctx.ctx, ctx.db, ctx.guild_config, bounty);
 
     ctx.reply(create_embed!(
         description: format!("Updated the bounty content of `{bounty_num}`."),

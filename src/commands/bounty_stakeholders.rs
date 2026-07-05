@@ -1,11 +1,11 @@
-use fluxer_neptunium::{create_embed, exts::UserExt, http::endpoints::channel::EditMessage};
+use fluxer_neptunium::create_embed;
 
 use crate::{
     colors::{FAILURE, SUCCESS},
     commands::CommandContext,
-    db::{bounties::BountyRelatedMessage, bounty_stakeholders::BountyStakeholder},
+    db::bounty_stakeholders::BountyStakeholder,
     util::{
-        bounty_content_to_message, confirmation::MaybeExpired, get_bounty_num_from_args,
+        confirmation::MaybeExpired, get_bounty_num_from_args, update_bounty_message,
         user_arg::parse_user_arg,
     },
 };
@@ -69,43 +69,12 @@ async fn add_bounty_stakeholder(ctx: CommandContext<'_>, args: &str) -> anyhow::
         })
         .await?;
 
-    if let Some(BountyRelatedMessage {
-        message_id,
-        channel_id,
-    }) = bounty.related_message
-    {
-        let created_by = match bounty.created_by.get_user(ctx.ctx).await {
-            Ok(created_by) => either::Either::Left(created_by.clone_inner()),
-            Err(e) => {
-                tracing::warn!("Error fetching user {}: {e}", bounty.created_by);
-                either::Either::Right(bounty.created_by)
-            }
-        };
-        ctx.ctx
-            .get_http_client()
-            .execute(EditMessage {
-                channel_id,
-                message_id,
-                body: bounty_content_to_message(
-                    &bounty.content,
-                    created_by,
-                    &ctx.guild_config.bounty_submission_format,
-                    bounty_num,
-                    bounty.created_at,
-                    bounty.state,
-                    ctx.db
-                        .list_assignee_queue_for_bounty(bounty.bounty_id)
-                        .await?,
-                    bounty.deadline,
-                    ctx.db.list_bounty_stakeholders(bounty.bounty_id).await?,
-                )
-                .into(),
-            })
-            .await?;
-    }
+    let bounty_number = bounty.bounty_number;
+
+    update_bounty_message(ctx.ctx, ctx.db, ctx.guild_config, bounty);
 
     ctx.reply(create_embed!(
-        description: format!("Added bounty stakeholder <@{user_id}> on bounty `{}` with `${amount:.2}`.", bounty.bounty_number),
+        description: format!("Added bounty stakeholder <@{user_id}> on bounty `{bounty_number}` with `${amount:.2}`."),
         color: SUCCESS,
     )).await?;
 
@@ -138,43 +107,12 @@ async fn remove_bounty_stakeholder(ctx: CommandContext<'_>, args: &str) -> anyho
         .remove_bounty_stakeholder(bounty.bounty_id, user_id)
         .await?;
 
-    if let Some(BountyRelatedMessage {
-        message_id,
-        channel_id,
-    }) = bounty.related_message
-    {
-        let created_by = match bounty.created_by.get_user(ctx.ctx).await {
-            Ok(created_by) => either::Either::Left(created_by.clone_inner()),
-            Err(e) => {
-                tracing::warn!("Error fetching user {}: {e}", bounty.created_by);
-                either::Either::Right(bounty.created_by)
-            }
-        };
-        ctx.ctx
-            .get_http_client()
-            .execute(EditMessage {
-                channel_id,
-                message_id,
-                body: bounty_content_to_message(
-                    &bounty.content,
-                    created_by,
-                    &ctx.guild_config.bounty_submission_format,
-                    bounty_num,
-                    bounty.created_at,
-                    bounty.state,
-                    ctx.db
-                        .list_assignee_queue_for_bounty(bounty.bounty_id)
-                        .await?,
-                    bounty.deadline,
-                    ctx.db.list_bounty_stakeholders(bounty.bounty_id).await?,
-                )
-                .into(),
-            })
-            .await?;
-    }
+    let bounty_number = bounty.bounty_number;
+
+    update_bounty_message(ctx.ctx, ctx.db, ctx.guild_config, bounty);
 
     ctx.reply(create_embed!(
-        description: format!("Removed bounty stakeholder <@{user_id}> from bounty `{}`.", bounty.bounty_number),
+        description: format!("Removed bounty stakeholder <@{user_id}> from bounty `{bounty_number}`."),
         color: SUCCESS,
     )).await?;
 
