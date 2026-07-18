@@ -177,6 +177,7 @@ dependencies = [
  "enumset",
  "fluxer-neptunium",
  "moka",
+ "pretty-duration",
  "rand 0.10.1",
  "serde",
  "serde_json",
@@ -1711,6 +1712,12 @@ checksum = "85eae3c4ed2f50dcfe72643da4befc30deadb458a9b590d720cde2f2b1e97da9"
 dependencies = [
  "zerocopy",
 ]
+
+[[package]]
+name = "pretty-duration"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d8868e7264af614b3634ff0abbe37b178e61000611b8a75221aea40221924aba"
 
 [[package]]
 name = "prettyplease"
